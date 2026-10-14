@@ -1,0 +1,835 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  SELLER
+  BUYER
+  DEALER
+  INSPECTOR
+  FINANCE
+  SUPPORT
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  PENDING
+  APPROVED
+  SOLD
+  REJECTED
+  DRAFT
+  ARCHIVED
+}
+
+enum InquiryStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CLOSED
+}
+
+enum InspectionStatus {
+  PENDING
+  ASSIGNED
+  COMPLETED
+  REJECTED
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIAL
+  CANCELED
+  EXPIRED
+}
+
+enum SellerType {
+  INDIVIDUAL
+  DEALER
+}
+
+enum SellerVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum DocumentType {
+  PAN_CARD
+  GST_CERTIFICATE
+  SHOP_LOGO
+  PROFILE_PHOTO
+  RC
+  INSURANCE
+  POLLUTION
+  INVOICE
+  SERVICE_BOOK
+  OWNERSHIP_PROOF
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum CartItemType {
+  CART
+  WISHLIST
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum MessageSenderType {
+  USER
+  ADMIN
+  SYSTEM
+}
+
+enum NotificationType {
+  VEHICLE_APPROVED
+  VEHICLE_REJECTED
+  SELLER_APPROVED
+  SELLER_REJECTED
+  NEW_INQUIRY
+  NEW_MESSAGE
+  SALE_COMPLETED
+  INSPECTION_SCHEDULED
+  PAYMENT_RECEIVED
+  SYSTEM_ALERT
+}
+
+enum PurchaseRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum TeamRole {
+  OWNER
+  MANAGER
+  SALES_EXECUTIVE
+  SUPPORT_AGENT
+}
+
+// ============================================================
+// CORE USER
+// ============================================================
+
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  username   String?  @unique
+  password   String?
+  role       Role     @default(BUYER)
+  fullName   String?
+  lastName   String?
+  phone      String?  @unique
+  avatar     String?
+  isVerified Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  isBlocked  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Seller-specific profile (1:1, only populated when role = SELLER/DEALER)
+  sellerProfile SellerProfile?
+
+  vehicles                 Vehicle[]
+  inquiries                Inquiry[]
+  wishlist                 Wishlist[]
+  cartItems                CartItem[]
+  payments                 Payment[]
+  loans                    Loan[]
+  notifications            Notification[]
+  subscriptions            Subscription[]
+  reports                  Report[]
+  assignedInspections      Inspection[]              @relation("InspectorInspections")
+  reviewsWritten           Review[]                  @relation("ReviewAuthor")
+  reviewsReceived          Review[]                  @relation("ReviewTarget")
+  ordersAsBuyer            Order[]                   @relation("BuyerOrders")
+  ordersAsSeller           Order[]                   @relation("SellerOrders")
+  conversationsAsUser      ConversationParticipant[]
+  messagesSent             Message[]                 @relation("MessageSender")
+  teamMemberships          TeamMember[]              @relation("TeamMemberUser")
+  vehicleStatusLogs        VehicleStatusHistory[]    @relation("StatusChangedBy")
+  savedSearches            SavedSearch[]
+  activityLogs             ActivityLog[]
+  AuthSession              AuthSession[]
+  purchaseRequestsSent     PurchaseRequest[]         @relation("BuyerPurchaseRequests")
+  purchaseRequestsReceived PurchaseRequest[]         @relation("SellerPurchaseRequests")
+}
+
+model AuthSession {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  refreshTokenHash String
+
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  userAgent String?
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ============================================================
+// SELLER BUSINESS PROFILE (from Seller Registration form)
+// ============================================================
+
+model SellerProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sellerType   SellerType @default(INDIVIDUAL)
+  ownerName    String
+  businessName String?
+  description  String?
+
+  // Location
+  address String?
+  city    String?
+  state   String?
+  pincode String?
+  country String  @default("India")
+
+  // Legal / compliance
+  gstNumber String?
+  panNumber String?
+
+  // Business metadata
+  yearsInBusiness Int?
+  website         String?
+
+  // Bank / payout details
+  bankAccountHolder String?
+  bankAccountNumber String?
+  bankIFSC          String?
+  bankName          String?
+
+  // Branding
+  profilePhoto String?
+  shopLogo     String?
+
+  isRegistered Boolean @default(true)
+  isApproved   Boolean @default(false)
+
+  // Verification workflow (admin reviews this)
+  verificationStatus SellerVerificationStatus @default(PENDING)
+  rejectReason       String?
+  submittedAt        DateTime                 @default(now())
+  reviewedAt         DateTime?
+  reviewedBy         String? // admin User.id who approved/rejected
+
+  isElite      Boolean @default(false)
+  rating       Float   @default(0)
+  totalReviews Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents   SellerDocument[]
+  teamMembers TeamMember[]
+
+  @@index([verificationStatus])
+}
+
+model SellerDocument {
+  id              String         @id @default(cuid())
+  sellerProfileId String
+  sellerProfile   SellerProfile  @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  type            DocumentType
+  fileUrl         String
+  status          DocumentStatus @default(PENDING)
+  uploadedAt      DateTime       @default(now())
+  verifiedAt      DateTime?
+}
+
+model TeamMember {
+  id              String        @id @default(cuid())
+  sellerProfileId String
+  sellerProfile   SellerProfile @relation(fields: [sellerProfileId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User          @relation("TeamMemberUser", fields: [userId], references: [id])
+  teamRole        TeamRole      @default(SALES_EXECUTIVE)
+  status          String        @default("Active") // Active / Invited / Suspended
+  joinedAt        DateTime      @default(now())
+
+  @@unique([sellerProfileId, userId])
+}
+
+// ============================================================
+// CATALOG
+// ============================================================
+
+model Brand {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String?
+  logo        String?
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  vehicles    Vehicle[]
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String?
+  icon        String?
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  vehicles    Vehicle[]
+}
+
+model OTP {
+  id        String   @id @default(cuid())
+  mobile    String
+  email     String
+  otp       String
+  expiresAt DateTime
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([mobile])
+}
+
+// ============================================================
+// VEHICLE
+// ============================================================
+
+model Vehicle {
+  id String @id @default(cuid())
+
+  // BASIC DETAILS
+  title       String
+  slug        String? @unique
+  description String?
+
+  brand   String
+  model   String
+  variant String?
+
+  categoryId    String?
+  category      Category? @relation(fields: [categoryId], references: [id])
+  brandId       String?
+  brandRelation Brand?    @relation(fields: [brandId], references: [id])
+  sellerId      String?
+  seller        User?     @relation(fields: [sellerId], references: [id])
+
+  // PRICE
+  price         Float
+  expectedPrice Float?
+  negotiable    Boolean @default(false)
+  emiAvailable  Boolean @default(false)
+
+  // VEHICLE INFO
+  year               Int?
+  registrationYear   Int?
+  mileage            Int?
+  fuelType           String
+  transmission       String
+  bodyType           String?
+  ownership          Int?
+  color              String?
+  engineCapacity     String?
+  seatingCapacity    Int?
+  registrationNumber String?
+  registrationState  String?
+  location           String?
+  city               String?
+  state              String?
+  pincode            String?
+
+  // INSURANCE
+  insuranceCompany String?
+  insuranceExpiry  DateTime?
+  insuranceType    String?
+
+  // FITNESS
+  fitnessValidTill   DateTime?
+  pollutionValidTill DateTime?
+
+  // DOCUMENTS & MEDIA
+  images            String[]
+  rcFront           String?
+  rcBack            String?
+  insuranceDocument String?
+  pollutionDocument String?
+  invoiceDocument   String?
+  serviceBook       String?
+  ownershipProof    String?
+  thumbnail         String?
+  interiorImages    String[]
+  exteriorImages    String[]
+  documentImages    String[]
+  videoUrl          String?
+
+  // FEATURES
+  features       String[]
+  airbags        Int?
+  abs            Boolean  @default(false)
+  sunroof        Boolean  @default(false)
+  alloyWheels    Boolean  @default(false)
+  bluetooth      Boolean  @default(false)
+  touchscreen    Boolean  @default(false)
+  reverseCamera  Boolean  @default(false)
+  parkingSensors Boolean  @default(false)
+  powerSteering  Boolean  @default(false)
+  powerWindows   Boolean  @default(false)
+  ac             Boolean  @default(false)
+  cruiseControl  Boolean  @default(false)
+  keylessEntry   Boolean  @default(false)
+
+  // STATUS / APPROVAL WORKFLOW
+  status       VehicleStatus @default(PENDING)
+  isFeatured   Boolean       @default(false)
+  isApproved   Boolean       @default(false)
+  isVerified   Boolean       @default(false)
+  views        Int           @default(0)
+  favorites    Int           @default(0)
+  rejectReason String?
+  publishedAt  DateTime?
+  soldAt       DateTime?
+  soldPrice    Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // RELATIONS
+  inquiries        Inquiry[]
+  wishlist         Wishlist[]
+  cartItems        CartItem[]
+  payments         Payment[]
+  loans            Loan[]
+  inspections      Inspection[]
+  orders           Order[]
+  reviews          Review[]
+  statusHistory    VehicleStatusHistory[]
+  purchaseRequests PurchaseRequest[]
+
+  // OWNER DETAILS
+  ownerName  String?
+  ownerPhone String?
+  ownerEmail String?
+
+  // VEHICLE CONDITION
+  condition   String?
+  vehicleType String?
+  sellerType  String?
+
+  // ENGINE DETAILS
+  engineNumber  String?
+  chassisNumber String?
+  vinNumber     String?
+
+  // SPECIFICATIONS
+  driveType        String?
+  gearBox          String?
+  maxPower         String?
+  maxTorque        String?
+  topSpeed         String?
+  fuelTankCapacity String?
+  bootSpace        String?
+  groundClearance  String?
+
+  // TYRES
+  frontTyreCondition String?
+  rearTyreCondition  String?
+  spareTyreAvailable Boolean @default(false)
+
+  // SERVICE DETAILS
+  serviceHistory  Boolean   @default(false)
+  lastServiceDate DateTime?
+  serviceCenter   String?
+
+  // CONDITION DETAILS
+  engineCondition  String?
+  tyreCondition    String?
+  batteryCondition String?
+  floodDamage      Boolean @default(false)
+
+  // ACCIDENT DETAILS
+  accidental          Boolean @default(false)
+  accidentDescription String?
+
+  // EXTRA DETAILS
+  reasonForSelling String?
+  loanRunning      Boolean @default(false)
+  loanCompany      String?
+  loanAmount       Float?
+  nocAvailable     Boolean @default(false)
+  numberOfKeys     Int?    @default(2)
+
+  // INSPECTION
+  inspectionDate    DateTime?
+  inspectionRemarks String?
+
+  // LOCATION
+  latitude  Float?
+  longitude Float?
+
+  // SEO
+  metaTitle       String?
+  metaDescription String?
+
+  @@index([status])
+  @@index([sellerId])
+  @@index([categoryId])
+  @@index([brandId])
+}
+
+// Full audit trail of every approve/reject/publish/archive action — powers the
+// admin's Vehicle Approvals history and lets a seller see *why* something changed.
+model VehicleStatusHistory {
+  id          String         @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  fromStatus  VehicleStatus?
+  toStatus    VehicleStatus
+  reason      String?
+  changedById String?
+  changedBy   User?          @relation("StatusChangedBy", fields: [changedById], references: [id])
+  createdAt   DateTime       @default(now())
+
+  @@index([vehicleId])
+}
+
+// ============================================================
+// BUYER INTERACTIONS
+// ============================================================
+
+model Inquiry {
+  id        String        @id @default(cuid())
+  vehicleId String
+  vehicle   Vehicle       @relation(fields: [vehicleId], references: [id])
+  buyerId   String
+  buyer     User          @relation(fields: [buyerId], references: [id])
+  message   String
+  status    InquiryStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([vehicleId])
+  @@index([buyerId])
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  vehicleId String
+  vehicle   Vehicle  @relation(fields: [vehicleId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, vehicleId])
+}
+
+// Generalized cart/wishlist store, matching the admin "Carts & Wishlist" page —
+// tracks both intents in one place with a `type` discriminator for easy querying.
+model CartItem {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  vehicleId String
+  vehicle   Vehicle      @relation(fields: [vehicleId], references: [id])
+  type      CartItemType @default(CART)
+  addedAt   DateTime     @default(now())
+
+  @@unique([userId, vehicleId, type])
+  @@index([type])
+}
+
+model SavedSearch {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String?
+  filters   Json // { category, brand, fuelType, priceMin, priceMax, ... }
+  alertsOn  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ============================================================
+// ORDERS / PURCHASES
+// ============================================================
+
+model Order {
+  id          String      @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle     @relation(fields: [vehicleId], references: [id])
+  buyerId     String
+  buyer       User        @relation("BuyerOrders", fields: [buyerId], references: [id])
+  sellerId    String
+  seller      User        @relation("SellerOrders", fields: [sellerId], references: [id])
+  amount      Float
+  commission  Float?
+  status      OrderStatus @default(PENDING)
+  completedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  payments Payment[]
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([status])
+}
+
+// Buyer "Send Request" from the vehicle page (PurchaseRequestModal).
+// Seller accepts/rejects it from Seller > Purchase Requests.
+model PurchaseRequest {
+  id           String                @id @default(cuid())
+  vehicleId    String
+  vehicle      Vehicle               @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  buyerId      String
+  buyer        User                  @relation("BuyerPurchaseRequests", fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId     String?
+  seller       User?                 @relation("SellerPurchaseRequests", fields: [sellerId], references: [id], onDelete: SetNull)
+  offerPrice   Float
+  buyerName    String
+  buyerPhone   String
+  buyerEmail   String?
+  message      String?
+  status       PurchaseRequestStatus @default(PENDING)
+  rejectReason String?
+  respondedAt  DateTime?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([vehicleId])
+  @@index([status])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id])
+  authorId  String
+  author    User     @relation("ReviewAuthor", fields: [authorId], references: [id])
+  targetId  String // seller being reviewed
+  target    User     @relation("ReviewTarget", fields: [targetId], references: [id])
+  rating    Int // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@index([targetId])
+}
+
+// ============================================================
+// INSPECTION / LOAN / PAYMENT
+// ============================================================
+
+model Inspection {
+  id          String           @id @default(cuid())
+  vehicleId   String
+  vehicle     Vehicle          @relation(fields: [vehicleId], references: [id])
+  inspectorId String?
+  inspector   User?            @relation("InspectorInspections", fields: [inspectorId], references: [id])
+  scheduledAt DateTime?
+  report      String?
+  status      InspectionStatus @default(PENDING)
+  approved    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Loan {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  vehicleId    String?
+  vehicle      Vehicle?   @relation(fields: [vehicleId], references: [id])
+  amount       Float
+  status       LoanStatus @default(PENDING)
+  tenureMonths Int?
+  interestRate Float?
+  emi          Float?
+  approvedBy   String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  vehicleId String?
+  vehicle   Vehicle?      @relation(fields: [vehicleId], references: [id])
+  orderId   String?
+  order     Order?        @relation(fields: [orderId], references: [id])
+  amount    Float
+  currency  String        @default("INR")
+  provider  String        @default("Razorpay")
+  status    PaymentStatus @default(PENDING)
+  reference String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([status])
+}
+
+// ============================================================
+// MESSAGING (buyer<->seller and admin<->seller/buyer chat)
+// ============================================================
+
+model Conversation {
+  id        String   @id @default(cuid())
+  vehicleId String? // optional — chat can be about a specific listing
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants ConversationParticipant[]
+  messages     Message[]
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  lastReadAt     DateTime?
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String            @id @default(cuid())
+  conversationId String
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String?
+  sender         User?             @relation("MessageSender", fields: [senderId], references: [id])
+  senderType     MessageSenderType @default(USER)
+  text           String
+  attachmentUrl  String?
+  createdAt      DateTime          @default(now())
+
+  @@index([conversationId])
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  type      NotificationType @default(SYSTEM_ALERT)
+  title     String
+  message   String
+  metadata  Json? // e.g. { vehicleId, reason, orderId }
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+}
+
+// ============================================================
+// SUBSCRIPTIONS / REPORTS / ACTIVITY LOG
+// ============================================================
+
+model Subscription {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id])
+  plan      String
+  status    SubscriptionStatus @default(ACTIVE)
+  price     Float
+  startDate DateTime           @default(now())
+  endDate   DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  type        String
+  title       String
+  content     String
+  generatedBy String?
+  createdAt   DateTime @default(now())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+}
+
+// Generic append-only audit trail for admin dashboard activity feeds
+// (login, listing created, seller approved, payout issued, etc.)
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String // e.g. "vehicle.approved", "seller.rejected", "order.completed"
+  entityType String? // e.g. "Vehicle", "SellerProfile", "Order"
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+}
+
+// Platform-wide revenue snapshots — powers the admin Revenue page's
+// day/week/month bar charts without needing to aggregate on every request.
+model RevenueSnapshot {
+  id               String   @id @default(cuid())
+  periodType       String // "daily" | "weekly" | "monthly"
+  periodLabel      String // "Mon", "W1", "Aug"
+  periodStart      DateTime
+  periodEnd        DateTime
+  totalRevenue     Float    @default(0)
+  commissionEarned Float    @default(0)
+  pendingPayouts   Float    @default(0)
+  createdAt        DateTime @default(now())
+
+  @@unique([periodType, periodLabel, periodStart])
+}
