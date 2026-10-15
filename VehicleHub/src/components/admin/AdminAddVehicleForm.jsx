@@ -1,10 +1,12 @@
+// VehicleHub/VehicleHub/src/components/admin/AdminAddVehicleForm.jsx
 import { useRef, useState } from 'react';
 import {
     Check, ChevronLeft, ChevronRight, Upload, X, Car, DollarSign,
     Settings2, FileText, Sparkles, User, MapPin, Image as ImageIcon, AlignLeft, Images, ShieldCheck,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { allVehicles, setAllVehicles } from '../../data/adminMockData.js';
+import { toast } from 'react-hot-toast';
+import { useCreateAdminVehicleMutation } from '../../services/adminApiSlice.js';
 
 const categories = ['Car', 'Bike', 'Scooter', 'Truck', 'Bus', 'Auto', 'Tractor', 'Commercial Vehicle'];
 const fuelTypes = ['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'];
@@ -147,6 +149,7 @@ export const AdminAddVehicleForm = () => {
     const [errors, setErrors] = useState({});
     const [submitted, setSubmitted] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [createVehicle] = useCreateAdminVehicleMutation();
 
     const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
     const toggleFeature = (feature) => setForm((prev) => ({ ...prev, features: prev.features.includes(feature) ? prev.features.filter((f) => f !== feature) : [...prev.features, feature] }));
@@ -182,36 +185,43 @@ export const AdminAddVehicleForm = () => {
     const goNext = () => { if (!validateStep(step)) return; setStep((s) => Math.min(s + 1, steps.length)); };
     const goBack = () => setStep((s) => Math.max(s - 1, 1));
 
+    // Saves through POST /api/vehicles — an admin's listing is published right away (or kept as a draft)
     const handleSubmit = async () => {
         if (!validateStep(4)) { setStep(4); return; }
         setSubmitting(true);
-        await new Promise((res) => setTimeout(res, 900));
+        try {
+            const formData = new FormData();
+            const simpleFields = [
+                'title', 'category', 'brand', 'model', 'variant', 'registrationNumber', 'vin',
+                'price', 'negotiable', 'emiAvailable',
+                'manufacturingYear', 'registrationYear', 'fuelType', 'transmission', 'kmDriven',
+                'ownership', 'color', 'seatingCapacity', 'engineCapacity', 'mileage',
+                'rcAvailable', 'insuranceAvailable', 'insuranceExpiry', 'pollutionCertificate',
+                'serviceBook', 'numberOfKeys', 'loanPending', 'nocAvailable',
+                'vehicleCondition', 'accidentHistory', 'floodDamage',
+                'engineCondition', 'tyreCondition', 'batteryCondition',
+                'sellerName', 'mobileNumber', 'email', 'sellerType', 'dealerName',
+                'country', 'state', 'city', 'area', 'pincode',
+                'description',
+            ];
+            simpleFields.forEach((key) => {
+                const value = form[key];
+                if (value !== undefined && value !== null && value !== '') formData.append(key, String(value));
+            });
+            form.features.forEach((item) => formData.append('features', item));
+            form.images.forEach((item) => { if (item?.file) formData.append('images', item.file); });
+            if (form.documents?.rcFront?.file) formData.append('rcFront', form.documents.rcFront.file);
+            if (form.documents?.insuranceDocument?.file) formData.append('insuranceDocument', form.documents.insuranceDocument.file);
+            formData.append('publishImmediately', form.publishImmediately ? 'true' : 'false');
 
-        // Admin-created listings publish directly (admin IS the approver) — appended to the live catalog
-        const newVehicle = {
-            id: `admin-v-${Date.now()}`,
-            sellerId: 'admin-added',
-            title: form.title,
-            seller: form.dealerName || form.sellerName,
-            category: form.category,
-            price: Number(form.price) || 0,
-            status: form.publishImmediately ? 'live' : 'draft',
-            views: 0,
-            thumb: '🚗',
-            postedOn: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-            description: form.description,
-            location: [form.area, form.city, form.state].filter(Boolean).join(', '),
-            fuelType: form.fuelType,
-            transmission: form.transmission,
-            kmDriven: Number(form.kmDriven) || 0,
-            sellerName: form.sellerName,
-            sellerEmail: form.email,
-            sellerPhone: form.mobileNumber,
-        };
-        setAllVehicles((prev) => [newVehicle, ...prev]);
-
-        setSubmitting(false);
-        setSubmitted(true);
+            const response = await createVehicle(formData).unwrap();
+            toast.success(response?.message || 'Vehicle added');
+            setSubmitted(true);
+        } catch (err) {
+            toast.error(err?.data?.message || 'Failed to add the vehicle');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     if (submitted) {

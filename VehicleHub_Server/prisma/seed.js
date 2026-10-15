@@ -12,15 +12,14 @@
 //   - Your own users, vehicles and sellers are never touched.
 //   - Brands, categories and revenue snapshots are upserted.
 //
+// The app has exactly four login roles: Admin, Seller, Buyer, Field Inspector.
 // Login after seeding (phone OTP, code = DummyOTP in .env, default 1234):
-//   Admin        9506536127
-//   Super admin  9000000001
-//   Sellers      9000000011 (dealer, approved) · 9000000012 (individual, approved)
-//                9000000013 (dealer, approved) · 9000000014 (PENDING review)
-//                9000000015 (REJECTED)
-//   Buyers       9000000021 … 9000000026
-//   Inspectors   9000000031 · 9000000032
-//   Finance      9000000041   Support 9000000042   Dealer 9000000043
+//   Admin             9506536127
+//   Sellers           9000000011 (dealer) · 9000000012 (individual) · 9000000013 (dealer)  — approved
+//   Seller applicants 9000000014 (application PENDING admin review) · 9000000015 (REJECTED)
+//                     — these two are still Buyers until an admin approves them
+//   Buyers            9000000021 … 9000000026
+//   Field Inspectors  9000000031 · 9000000032
 // Email + password login (POST /api/auth/login): any seed email / Password@123
 // ============================================================
 
@@ -31,7 +30,7 @@ const prisma = new PrismaClient();
 
 const SEED_EMAIL_DOMAIN = "@seed.vehiclehub.in";
 const SEED_SLUG_PREFIX = "seed-";
-const DEFAULT_PASSWORD = "123456";
+const DEFAULT_PASSWORD = "Password@123";
 const ADMIN_PHONE = "+919506536127"; // OTPController treats this number as ADMIN
 
 // ------------------------------------------------------------
@@ -283,12 +282,13 @@ async function seedUsers() {
   });
 
   const defs = [
-    make("superadmin", "SUPER_ADMIN", "Super Admin", "+919000000001"),
-    make("seller1", "SELLER", "Rajesh Kumar", "+919000000011"),
-    make("seller2", "SELLER", "Priya Sharma", "+919000000012"),
-    make("seller3", "SELLER", "Arjun Reddy", "+919000000013"),
-    make("seller4", "SELLER", "Mohammed Irfan", "+919000000014"),
-    make("seller5", "SELLER", "Kavita Joshi", "+919000000015"),
+    // Dealers (shops, many vehicles) and an individual Seller (one vehicle at a time)
+    make("seller1", "DEALER", "Rajesh Kumar", "+919000000011"), // Kumar Auto World
+    make("seller2", "SELLER", "Priya Sharma", "+919000000012"), // individual
+    make("seller3", "DEALER", "Arjun Reddy", "+919000000013"), // Reddy Wheels & Commercial
+    // Applicants stay BUYER until an admin approves (seller4 applied as a dealer, seller5 as an individual)
+    make("seller4", "BUYER", "Mohammed Irfan", "+919000000014"),
+    make("seller5", "BUYER", "Kavita Joshi", "+919000000015"),
     make("buyer1", "BUYER", "Ananya Iyer", "+919000000021"),
     make("buyer2", "BUYER", "Rohan Mehta", "+919000000022"),
     make("buyer3", "BUYER", "Sneha Patil", "+919000000023"),
@@ -297,9 +297,6 @@ async function seedUsers() {
     make("buyer6", "BUYER", "Karthik Nair", "+919000000026"),
     make("inspector1", "INSPECTOR", "Suresh Babu", "+919000000031"),
     make("inspector2", "INSPECTOR", "Deepak Yadav", "+919000000032"),
-    make("finance1", "FINANCE", "Meera Krishnan", "+919000000041"),
-    make("support1", "SUPPORT", "Aditya Rao", "+919000000042"),
-    make("dealer1", "DEALER", "Sanjay Motors", "+919000000043"),
   ];
 
   // Free up seed phone numbers if a non-seed account somehow holds one (phone is @unique)
@@ -440,16 +437,6 @@ async function seedSellers(users) {
     result[p.user.id] = profile;
   }
 
-  // Team member on the elite dealer (support user acts as sales executive)
-  await prisma.teamMember.create({
-    data: {
-      sellerProfileId: result[users.seller1.id].id,
-      userId: users.support1.id,
-      teamRole: "SALES_EXECUTIVE",
-      status: "Active",
-    },
-  });
-
   console.log(`  ${profiles.length} seller profiles`);
   return result;
 }
@@ -465,10 +452,16 @@ function hash(str) {
 // ------------------------------------------------------------
 async function seedVehicles(users, catalog) {
   // which seller lists which vehicle
+  // seller2 is an individual Seller: one open listing (plus past sales); everything else goes to the dealers
+  let individualOpen = 0;
   const sellerFor = (i, category) => {
     if (["Truck", "Commercial Vehicle", "Tractor", "Auto", "Bus"].includes(category)) return users.seller3;
-    if (["Bike", "Scooter"].includes(category)) return i % 2 ? users.seller3 : users.seller2;
-    return i % 3 === 0 ? users.seller2 : users.seller1;
+    const dealer = ["Bike", "Scooter"].includes(category) ? users.seller3 : users.seller1;
+    const wantsIndividual = ["Bike", "Scooter"].includes(category) ? i % 2 === 0 : i % 3 === 0;
+    if (!wantsIndividual) return dealer;
+    if ((STATUS_PLAN[i]?.status || "AVAILABLE") === "SOLD") return users.seller2;
+    if (individualOpen === 0) { individualOpen += 1; return users.seller2; }
+    return dealer;
   };
 
   const vehicles = [];
@@ -766,24 +759,69 @@ async function seedActivity(users, vehicles) {
     });
   }
 
-  // Inspections
+  // Inspections (assigned by the admin to the two field inspectors)
+  const checklistDone = {
+    sellerVerified: true, sellerNotes: "Owner present with Aadhaar and RC.",
+    documentsVerified: true, vehicleIdentityVerified: true,
+    exteriorVerified: true, interiorVerified: true, mechanicalVerified: true,
+    testDriveCompleted: true, locationVerified: true, photosCompleted: true,
+  };
+  const checks = (good) => [
+    { id: "x1", category: "Identity", item: "Registration Number Match", condition: good ? "Matched" : "Mismatch", status: good ? "VERIFIED" : "FAILED", remarks: null },
+    { id: "x2", category: "Identity", item: "VIN/Chassis Number Match", condition: good ? "Matched" : "Mismatch", status: good ? "VERIFIED" : "FAILED", remarks: good ? null : "Chassis number differs from RC" },
+    { id: "x3", category: "Exterior", item: "Front", condition: "Good", status: "VERIFIED", remarks: null },
+    { id: "x4", category: "Exterior", item: "Tyres", condition: good ? "Excellent" : "Fair", status: "VERIFIED", remarks: null },
+    { id: "x5", category: "Mechanical", item: "Engine Start", condition: "Good", status: "VERIFIED", remarks: null },
+    { id: "x6", category: "TestDrive", item: "Test Drive", condition: "4/5", status: "VERIFIED", remarks: "Rating: 4/5" },
+  ];
+  const at = (days, hour) => { const d = days >= 0 ? daysFromNow(days) : daysAgo(-days); d.setHours(hour, 0, 0, 0); return d; };
+  const soldVehicle = sold[0];
   const inspectionPlan = [
-    { v: pending[0], inspector: users.inspector1, status: "ASSIGNED", at: daysFromNow(0), approved: false },
-    { v: pending[1], inspector: users.inspector2, status: "ASSIGNED", at: daysFromNow(2), approved: false },
-    { v: pending[2], inspector: null, status: "PENDING", at: null, approved: false },
-    { v: live[0], inspector: users.inspector1, status: "COMPLETED", at: daysAgo(80), approved: true, report: "Engine, transmission and body in excellent condition. No accident history." },
-    { v: live[1], inspector: users.inspector2, status: "COMPLETED", at: daysAgo(70), approved: true, report: "Minor scratches on rear bumper. Tyres at 70%. Recommended." },
-    { v: vehicles.find((x) => x.status === "REJECTED"), inspector: users.inspector1, status: "REJECTED", at: daysAgo(20), approved: false, report: "Chassis number on RC does not match vehicle." },
+    // inspector 1 — today's job waiting to be accepted, one accepted for later, one in progress, two finished
+    { v: pending[0], inspector: users.inspector1, status: "ASSIGNED", at: at(0, 15), priority: "HIGH" },
+    { v: live[2], inspector: users.inspector1, status: "ACCEPTED", at: at(3, 11), priority: "MEDIUM", accepted: true },
+    { v: live[3], inspector: users.inspector1, status: "IN_PROGRESS", at: at(0, 10), priority: "URGENT", accepted: true, started: true,
+      checklist: { sellerVerified: true, sellerNotes: "Seller present.", documentsVerified: true } },
+    { v: live[0], inspector: users.inspector1, status: "COMPLETED", at: at(-80, 11), priority: "MEDIUM", accepted: true, started: true, result: "VERIFIED", rating: 5,
+      notes: "Engine, transmission and body in excellent condition. No accident history.", checklist: checklistDone, checks: checks(true) },
+    { v: vehicles.find((x) => x.status === "REJECTED"), inspector: users.inspector1, status: "COMPLETED", at: at(-20, 12), priority: "HIGH", accepted: true, started: true, result: "REJECTED",
+      rejection: "Chassis number on RC does not match vehicle.", checklist: { ...checklistDone, vehicleIdentityVerified: false }, checks: checks(false) },
+    // inspector 2
+    { v: pending[1], inspector: users.inspector2, status: "ASSIGNED", at: at(2, 16), priority: "MEDIUM" },
+    { v: live[1], inspector: users.inspector2, status: "COMPLETED", at: at(-70, 10), priority: "LOW", accepted: true, started: true, result: "VERIFIED", rating: 4,
+      notes: "Minor scratches on rear bumper. Tyres at 70%. Recommended.", checklist: checklistDone, checks: checks(true) },
+    { v: soldVehicle, inspector: users.inspector2, status: "COMPLETED", at: at(-30, 14), priority: "MEDIUM", accepted: true, started: true, result: "NEEDS_CORRECTION", rating: 3,
+      correction: "Insurance copy expired — seller to upload the renewed policy.", checklist: { ...checklistDone, documentsVerified: false }, checks: checks(true) },
+    // not assigned yet — the admin assigns it from Vehicle Approvals
+    { v: pending[2], inspector: null, status: "PENDING", at: null, priority: "MEDIUM" },
   ].filter((p) => p.v);
   for (const p of inspectionPlan) {
+    const assignedAt = p.inspector ? (p.at && p.at < new Date() ? new Date(p.at.getTime() - 3 * 86400000) : daysAgo(1)) : null;
+    const done = p.status === "COMPLETED";
     await prisma.inspection.create({
       data: {
         vehicleId: p.v.id,
         inspectorId: p.inspector?.id || null,
         scheduledAt: p.at,
         status: p.status,
-        approved: p.approved,
-        report: p.report || null,
+        priority: p.priority,
+        approved: p.result === "VERIFIED",
+        assignedAt,
+        assignedById: p.inspector ? users.admin.id : null,
+        acceptedAt: p.accepted ? assignedAt : null,
+        startedAt: p.started ? p.at : null,
+        completedAt: done ? new Date(p.at.getTime() + 2 * 3600000) : null,
+        result: p.result || null,
+        finalRating: p.rating || null,
+        finalNotes: p.notes || null,
+        rejectionReason: p.rejection || null,
+        correctionReason: p.correction || null,
+        report: p.notes || p.rejection || p.correction || null,
+        checklist: p.checklist || undefined,
+        vehicleChecks: p.checks || undefined,
+        documentChecks: done ? [{ id: "d1", documentType: "RC", documentUrl: p.v.rcFront, documentNumber: p.v.registrationNumber, status: p.result === "REJECTED" ? "REJECTED" : "VERIFIED", remarks: null, rejectionReason: p.result === "REJECTED" ? p.rejection : null }] : undefined,
+        locationCheck: done ? { actualAddress: `${p.v.location}, ${p.v.city}`, locationMatched: true, vehiclePresent: true, sellerPresent: true, remarks: null } : undefined,
+        photos: done ? (p.v.images || []).slice(0, 2).map((url, k) => ({ id: `ph${k}`, imageUrl: url, category: k ? "Vehicle Rear" : "Vehicle Front", uploadedAt: p.at.toISOString() })) : undefined,
       },
     });
   }
@@ -807,7 +845,7 @@ async function seedActivity(users, vehicles) {
         tenureMonths: l.tenure,
         interestRate: l.rate,
         emi,
-        approvedBy: ["APPROVED", "PAID"].includes(l.status) ? users.finance1.id : null,
+        approvedBy: ["APPROVED", "PAID"].includes(l.status) ? users.admin.id : null,
       },
     });
   }
@@ -818,7 +856,6 @@ async function seedActivity(users, vehicles) {
       { userId: users.seller1.id, plan: "Dealer Pro", status: "ACTIVE", price: 4999, startDate: daysAgo(40), endDate: daysFromNow(325) },
       { userId: users.seller3.id, plan: "Dealer Basic", status: "TRIAL", price: 0, startDate: daysAgo(5), endDate: daysFromNow(9) },
       { userId: users.seller2.id, plan: "Individual Boost", status: "EXPIRED", price: 499, startDate: daysAgo(120), endDate: daysAgo(30) },
-      { userId: users.dealer1.id, plan: "Dealer Pro", status: "ACTIVE", price: 4999, startDate: daysAgo(10), endDate: daysFromNow(355) },
     ],
   });
 
@@ -890,12 +927,12 @@ async function seedCommunication(users, vehicles, { live, pending, sold }) {
     n.push({ userId: rejected.sellerId, type: "VEHICLE_REJECTED", title: "Listing rejected", message: rejected.rejectReason, metadata: seedMeta({ vehicleId: rejected.id }) });
   }
   n.push(
-    { userId: users.seller1.id, type: "SELLER_APPROVED", title: "Seller account approved", message: "Your seller account has been verified.", metadata: seedMeta(), isRead: true },
+    { userId: users.seller1.id, type: "SELLER_APPROVED", title: "Dealer account approved", message: "Your dealer account has been verified.", metadata: seedMeta(), isRead: true },
     { userId: users.seller5.id, type: "SELLER_REJECTED", title: "Seller verification failed", message: "PAN card image does not match the owner name.", metadata: seedMeta() },
     { userId: users.buyer1.id, type: "NEW_MESSAGE", title: "New message", message: "Seller replied to your chat.", metadata: seedMeta() },
     { userId: users.buyer4.id, type: "PAYMENT_RECEIVED", title: "Payment successful", message: "Your payment was received.", metadata: seedMeta(), isRead: true },
-    { userId: users.inspector1.id, type: "INSPECTION_SCHEDULED", title: "Inspection assigned", message: `Inspect ${pending[0]?.title || "a vehicle"} today.`, metadata: seedMeta() },
-    { userId: users.inspector2.id, type: "INSPECTION_SCHEDULED", title: "Inspection assigned", message: `Inspect ${pending[1]?.title || "a vehicle"} in 2 days.`, metadata: seedMeta() },
+    { userId: users.inspector1.id, type: "INSPECTION_SCHEDULED", title: "New inspection assigned", message: `Inspect ${pending[0]?.title || "a vehicle"} today at 3 PM.`, metadata: seedMeta() },
+    { userId: users.inspector2.id, type: "INSPECTION_SCHEDULED", title: "New inspection assigned", message: `Inspect ${pending[1]?.title || "a vehicle"} in 2 days.`, metadata: seedMeta() },
     { userId: users.admin.id, type: "SYSTEM_ALERT", title: "New seller registration", message: "Irfan Car Bazaar is waiting for verification.", metadata: seedMeta({ sellerUserId: users.seller4.id }) },
     { userId: users.admin.id, type: "SYSTEM_ALERT", title: "Vehicles awaiting approval", message: `${pending.length} listings need review.`, metadata: seedMeta() },
   );
@@ -906,7 +943,7 @@ async function seedCommunication(users, vehicles, { live, pending, sold }) {
     data: [
       { type: "SALES", title: "Monthly sales summary", content: `Vehicles sold: ${sold.length}. Live listings: ${live.length}.`, generatedBy: "seed", userId: users.admin.id },
       { type: "INVENTORY", title: "Pending approvals", content: `${pending.length} vehicles pending admin review.`, generatedBy: "seed", userId: users.admin.id },
-      { type: "FRAUD", title: "Listing flagged", content: "Chassis mismatch reported on a rejected listing.", generatedBy: "seed", userId: users.support1.id },
+      { type: "FRAUD", title: "Listing flagged", content: "Chassis mismatch reported on a rejected listing.", generatedBy: "seed", userId: users.admin.id },
     ],
   });
 
@@ -975,7 +1012,7 @@ async function main() {
   const activity = await seedActivity(users, vehicles);
   await seedCommunication(users, vehicles, activity);
   console.log("Done ✔");
-  console.log("Login with phone OTP (code from DummyOTP, default 1234): seller 9000000011, buyer 9000000021, admin 9506536127");
+  console.log("Login with phone OTP (code from DummyOTP, default 1234): admin 9506536127 · dealer 9000000011 · seller 9000000012 · buyer 9000000021 · field inspector 9000000031");
 }
 
 main()

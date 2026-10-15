@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/components/seller/EditVehicleModal.jsx
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'react-hot-toast';
@@ -60,7 +61,7 @@ const FIELD_GROUPS = [
             { key: 'sellerName', label: 'Seller Name', type: 'text' },
             { key: 'mobileNumber', label: 'Mobile Number', type: 'text' },
             { key: 'email', label: 'Seller Email', type: 'email' },
-            { key: 'sellerType', label: 'Seller Type', type: 'select', options: ['Individual', 'Dealer'] },
+            // Seller type is not editable — it follows the account (Seller = Individual, Dealer = Dealer)
             { key: 'dealerName', label: 'Dealer Name', type: 'text' },
         ],
     },

@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/services/sellerApiSlice.js
 import { apiSlice } from "./apiSlice.js";
 
 export const sellerApi = apiSlice.injectEndpoints({
@@ -31,8 +32,9 @@ export const sellerApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ["Vehicle"],
     }),
+    // Own orders + buyer payments: { data: { orders, payments, totals } }
     getSellerOrders: builder.query({
-      query: () => "/orders",
+      query: () => "/sellers/me/sales",
       providesTags: ["Order"],
     }),
 
@@ -43,14 +45,15 @@ export const sellerApi = apiSlice.injectEndpoints({
         body: payload,
       }),
     }),
+    // { role, status, isApproved, accountType: "Seller"|"Dealer", listingAllowance: { limit, open, remaining, canAdd } }
+    getMySellerStatus: builder.query({
+      query: () => "/sellers/me/status",
+      providesTags: ["SellerStatus", "Vehicle"],
+    }),
     getSellerStatus: builder.query({
       query: (sellerId) => `/sellers/${sellerId}/seller-status`,
       providesTags: ["SellerStatus"],
     }),
-    // getSellerInventory: builder.query({
-    //   query: (sellerId) => `/sellers/${sellerId}/vehicles`,
-    //   providesTags: ["Vehicle"],
-    // }),
     getSellerInventory: builder.query({
       query: (arg) => {
         const value = typeof arg === "string" ? arg : arg?.status;
@@ -200,6 +203,26 @@ export const sellerApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ["PurchaseRequest"],
     }),
+    //======================== Messages (the signed-in user's own conversations) ==================
+    getMyConversations: builder.query({
+      query: () => "/conversations",
+      providesTags: ["Conversation"],
+    }),
+    sendConversationMessage: builder.mutation({
+      query: ({ conversationId, text }) => ({
+        url: `/conversations/${conversationId}/messages`,
+        method: "POST",
+        body: { text },
+      }),
+      invalidatesTags: ["Conversation"],
+    }),
+    markConversationRead: builder.mutation({
+      query: (conversationId) => ({
+        url: `/conversations/${conversationId}/read`,
+        method: "PATCH",
+      }),
+      invalidatesTags: ["Conversation"],
+    }),
   }),
   overrideExisting: false,
 });
@@ -212,6 +235,7 @@ export const {
   useGetSellerOrdersQuery,
   useRegisterSellerMutation,
   useGetSellerStatusQuery,
+  useGetMySellerStatusQuery,
 
   useGetSellerInventoryQuery,
   useDeleteMyVehicleMutation,
@@ -240,4 +264,8 @@ export const {
   useGetPurchaseRequestByIdQuery,
   useAcceptPurchaseRequestMutation,
   useRejectPurchaseRequestMutation,
+  // Messages
+  useGetMyConversationsQuery,
+  useSendConversationMessageMutation,
+  useMarkConversationReadMutation,
 } = sellerApi;

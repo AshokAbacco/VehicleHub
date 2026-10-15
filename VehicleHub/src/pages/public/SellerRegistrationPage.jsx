@@ -1,15 +1,15 @@
-import { useState } from "react";
-import { useNavigate, } from "react-router-dom";
+// VehicleHub/VehicleHub/src/pages/public/SellerRegistrationPage.jsx
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { toast } from 'react-toastify';
+import { toast } from 'react-hot-toast'; // the app renders react-hot-toast's <Toaster>
 import {
     ShieldCheck, Camera, FileText, Home, MapPin, Phone,
-    Building2, CreditCard, Landmark, CheckCircle2, User,
+    Building2, CreditCard, Landmark, CheckCircle2, User, Clock, XCircle, Loader2, Search,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useAuthGate } from "../../context/AuthGateContext.jsx";
-
-import { addPendingSellerRegistration } from "../../data/adminSellerVerification.js";
+import { fetchSellerStatus, openSellerArea } from "../../utils/sellerStatus.js";
 
 
 import { useRegisterSellerMutation } from "../../services/sellerApiSlice.js";
@@ -67,7 +67,35 @@ export const SellerRegistration = () => {
     const [formData, setFormData] = useState(initialFormData);
     const [submitting, setSubmitting] = useState(false);
 
-    // NEW: tracks which screen to show
+    // Application status from the server: undefined = loading, null = never applied,
+    // or { status: PENDING | APPROVED | REJECTED, rejectReason, sellerProfile, role }
+    const [application, setApplication] = useState(user ? undefined : null);
+    const role = String(user?.role || '').toLowerCase();
+
+    useEffect(() => {
+        let cancelled = false;
+        if (!user) { setApplication(null); return undefined; }
+        fetchSellerStatus().then((st) => {
+            if (cancelled) return;
+            if (st?.isApproved) {
+                // Already an approved seller — go straight to the seller dashboard
+                openSellerArea({ navigate, user, completeAuth });
+                return;
+            }
+            setApplication(st?.isSellerRegistered ? st : null);
+            // Rejected: start the form from what they sent last time
+            if (st?.status === 'REJECTED' && st.sellerProfile) {
+                setFormData((prev) => ({
+                    ...prev,
+                    ownerName: st.sellerProfile.ownerName || prev.ownerName,
+                    businessName: st.sellerProfile.businessName || prev.businessName,
+                    sellerType: st.sellerProfile.sellerType === 'DEALER' ? 'Dealer' : 'Individual',
+                }));
+            }
+        });
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id]);
 
 
     const handleChange = (e) => {
@@ -78,7 +106,7 @@ export const SellerRegistration = () => {
         }));
     };
 
-    // Note: automatic polling/pending persistence removed — after registration we redirect to dashboard.
+    // After submitting, the application waits for an admin; the account stays a buyer until approved.
 
     const handleSubmit = async (e) => {
 
@@ -126,52 +154,18 @@ export const SellerRegistration = () => {
 
             const response = await registerSeller(fd).unwrap();
 
-            const sellerUser = {
-                ...(user || {}),
-                ...(response?.user || {}),
-                id: user?.id || response?.user?.id || `seller-${Date.now()}`,
-                name: response?.user?.fullName || fullName,
-                fullName: response?.user?.fullName || fullName,
-                email: formData.email?.trim() || user?.email || 'seller@vehiclehub.io',
-                phone,
-                role: 'seller', // server switches the user to SELLER on registration
+            // Under review now — the seller dashboard opens once an admin approves
+            setApplication({
+                status: 'PENDING',
+                isSellerRegistered: true,
                 sellerProfile: {
-                    id: response?.sellerProfile?.id,
-                    verificationStatus: response?.sellerProfile?.verificationStatus,
+                    ownerName: formData.ownerName?.trim() || fullName,
+                    businessName: formData.businessName,
+                    submittedAt: new Date().toISOString(),
                 },
-            };
-
-            addPendingSellerRegistration({
-                ownerName: formData.ownerName?.trim() || fullName,
-                businessName: formData.businessName,
-                sellerType: formData.sellerType,
-                email: formData.email,
-                phone,
-                address: formData.address,
-                city: formData.city,
-                state: formData.state,
-                pincode: formData.pincode,
-                gstNumber: formData.gstNumber,
-                panNumber: formData.panNumber,
-                yearsInBusiness: formData.yearsInBusiness,
-                website: formData.website,
-                bankAccountHolder: formData.bankAccountHolder,
-                bankAccountNumber: formData.bankAccountNumber,
-                bankIFSC: formData.bankIFSC,
-                bankName: formData.bankName,
-                description: formData.description,
-                panCardImage: formData.panCardImage?.name || null,
-                gstCertificate: formData.gstCertificate?.name || null,
-                profilePhoto: formData.profilePhoto?.name || null,
-                shopLogo: formData.shopLogo?.name || null,
-                userId: sellerUser?.id,
             });
-
-            // Complete auth for the newly-registered seller and go straight to dashboard
-            const token = response?.token || localStorage.getItem('vehiclehub_token');
-            completeAuth?.(sellerUser, token);
-            toast.success("Registration successful — redirecting to your seller dashboard.");
-            navigate('/seller/dashboard');
+            toast.success(response?.message || 'Registration submitted. An admin will review it shortly.');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
 
         } catch (error) {
             console.error('Seller registration failed', error);
@@ -218,8 +212,54 @@ export const SellerRegistration = () => {
                         </div>
                     </div>
 
-                    {/* Right — form */}
+                    {/* Right — application status, or the form */}
+                    {application === undefined ? (
+                        <div className="flex h-64 items-center justify-center rounded-[32px] bg-white shadow-2xl shadow-slate-900/5">
+                            <Loader2 className="h-6 w-6 animate-spin text-[#001f3f]" />
+                        </div>
+                    ) : role === 'admin' || role === 'inspector' ? (
+                        <div className="rounded-[32px] bg-white p-8 text-center shadow-2xl shadow-slate-900/5">
+                            <ShieldCheck size={28} className="mx-auto text-[#001f3f]" />
+                            <h2 className="mt-3 text-lg font-bold text-slate-900">This account can't register as a seller</h2>
+                            <p className="mt-1 text-sm text-slate-500">Admin and Field Inspector accounts are separate from seller accounts. Sign in with a buyer account to apply.</p>
+                        </div>
+                    ) : application?.status === 'PENDING' ? (
+                        <div className="rounded-[32px] bg-white p-6 shadow-2xl shadow-slate-900/5 sm:p-8">
+                            <div className="flex flex-col items-center text-center">
+                                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-amber-600 ring-8 ring-amber-50/60"><Clock size={28} /></span>
+                                <p className="mt-5 text-xs font-semibold uppercase tracking-[0.25em] text-amber-600">Application under review</p>
+                                <h2 className="mt-2 text-2xl font-extrabold text-slate-900">Thanks{application.sellerProfile?.ownerName ? `, ${application.sellerProfile.ownerName.split(' ')[0]}` : ''}! We're verifying your details.</h2>
+                                <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+                                    Our admin team reviews every seller registration{application.sellerProfile?.businessName ? ` — including ${application.sellerProfile.businessName}` : ''}.
+                                    You'll get a notification as soon as it's approved, and then your {application.sellerProfile?.sellerType === 'DEALER' ? 'dealer' : 'seller'} dashboard opens for you.
+                                </p>
+                                {application.sellerProfile?.submittedAt && (
+                                    <p className="mt-3 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                                        Submitted {new Date(application.sellerProfile.submittedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                                    </p>
+                                )}
+                                <div className="mt-6 grid w-full gap-3 sm:grid-cols-2">
+                                    <Link to="/search" className="flex items-center justify-center gap-2 rounded-xl border-2 border-slate-200 bg-white py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+                                        <Search size={15} /> Browse vehicles
+                                    </Link>
+                                    <Link to="/buyer/dashboard/notifications" className="flex items-center justify-center gap-2 rounded-xl bg-[#001f3f] py-3 text-sm font-bold text-white shadow-md transition hover:bg-[#002a55]">
+                                        Check notifications
+                                    </Link>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
                     <div className="rounded-[32px] bg-white p-6 shadow-2xl shadow-slate-900/5 sm:p-8">
+                        {application?.status === 'REJECTED' && (
+                            <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                                <XCircle size={18} className="mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="font-bold">Your previous application was not approved</p>
+                                    {application.rejectReason && <p className="mt-0.5"><span className="font-semibold">Reason:</span> {application.rejectReason}</p>}
+                                    <p className="mt-1 text-red-600/80">Correct the details below and submit again.</p>
+                                </div>
+                            </div>
+                        )}
                         <div className="mb-6 flex items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4">
                             <div>
                                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Seller card</p>
@@ -231,12 +271,18 @@ export const SellerRegistration = () => {
                         <form className="space-y-8" onSubmit={handleSubmit}>
                             {/* Seller type */}
                             <div>
-                                <SectionHeader icon={User} title="Seller Type" />
+                                <SectionHeader icon={User} title="Account Type" subtitle="This decides your account once the admin approves it" />
                                 <div className="grid gap-3 sm:grid-cols-2">
-                                    {['Individual', 'Dealer'].map((type) => (
-                                        <label key={type} className={`flex cursor-pointer items-center gap-2 rounded-2xl border-2 px-4 py-3 transition ${formData.sellerType === type ? 'border-[#001f3f] bg-[#e6f2ff]' : 'border-slate-200 bg-slate-50 hover:border-[#001f3f]/30'}`}>
-                                            <input type="radio" name="sellerType" value={type} checked={formData.sellerType === type} onChange={handleChange} className="h-4 w-4 accent-[#001f3f]" />
-                                            <span className="font-medium text-slate-800">{type}</span>
+                                    {[
+                                        { type: 'Individual', title: 'Seller (individual)', text: 'Selling your own vehicle — one listing at a time.' },
+                                        { type: 'Dealer', title: 'Dealer (shop / business)', text: 'Running a shop — list and manage many vehicles.' },
+                                    ].map(({ type, title, text }) => (
+                                        <label key={type} className={`flex cursor-pointer items-start gap-3 rounded-2xl border-2 px-4 py-3 transition ${formData.sellerType === type ? 'border-[#001f3f] bg-[#e6f2ff]' : 'border-slate-200 bg-slate-50 hover:border-[#001f3f]/30'}`}>
+                                            <input type="radio" name="sellerType" value={type} checked={formData.sellerType === type} onChange={handleChange} className="mt-1 h-4 w-4 accent-[#001f3f]" />
+                                            <span>
+                                                <span className="block font-semibold text-slate-800">{title}</span>
+                                                <span className="block text-xs text-slate-500">{text}</span>
+                                            </span>
                                         </label>
                                     ))}
                                 </div>
@@ -247,7 +293,7 @@ export const SellerRegistration = () => {
                                 <SectionHeader icon={Building2} title="Business Information" subtitle="Tell us who you are" />
                                 <div className="grid gap-4 sm:grid-cols-2">
                                     <Field label="Owner name" required><TextInput type="text" name="ownerName" value={formData.ownerName} onChange={handleChange} required /></Field>
-                                    <Field label="Business name"><TextInput type="text" name="businessName" value={formData.businessName} onChange={handleChange} placeholder="e.g. RK Dealerships" /></Field>
+                                    <Field label={formData.sellerType === 'Dealer' ? 'Shop / business name' : 'Business name (optional)'} required={formData.sellerType === 'Dealer'}><TextInput type="text" name="businessName" value={formData.businessName} onChange={handleChange} required={formData.sellerType === 'Dealer'} placeholder="e.g. RK Dealerships" /></Field>
                                     <Field label="Email" required><TextInput type="email" name="email" value={formData.email} onChange={handleChange} required /></Field>
                                     <Field label="Phone" required><TextInput type="tel" name="phone" value={formData.phone} onChange={handleChange} required /></Field>
                                     <Field label="Years in business"><TextInput type="number" name="yearsInBusiness" value={formData.yearsInBusiness} onChange={handleChange} placeholder="e.g. 5" /></Field>
@@ -318,6 +364,7 @@ export const SellerRegistration = () => {
                             <p className="text-center text-xs text-slate-400">Your registration will be reviewed by our admin team before you can start listing.</p>
                         </form>
                     </div>
+                    )}
                 </div>
             </div>
         </div>

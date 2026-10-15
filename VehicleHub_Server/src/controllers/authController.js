@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub_Server/src/controllers/authController.js
 import authService from "../services/authService.js";
 import { sendSuccess, sendError } from "../utils/response.js";
 import { validate } from "../middleware/validationMiddleware.js";
@@ -286,5 +287,7 @@ export const changePassword = (req, res) =>
   sendSuccess(res, "Password changed");
 export const getCurrentUser = (req, res) => {
   if (!req.user) return sendError(res, "No authenticated user", 401);
-  sendSuccess(res, "Current user fetched", { user: req.user });
+  // Never send the password hash to the browser
+  const { password, ...user } = req.user;
+  sendSuccess(res, "Current user fetched", { user });
 };

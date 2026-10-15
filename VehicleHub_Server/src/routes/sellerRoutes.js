@@ -1,10 +1,16 @@
 // VehicleHub/VehicleHub_Server/src/routes/sellerRoutes.js
+// Mounted at /api/sellers.
+//  - /register and /me/status: any logged-in user (a buyer applying to sell)
+//  - everything else: APPROVED sellers only (admins also allowed where noted)
 import { Router } from "express";
-import multer from "multer";
 import {
   registerSeller,
   getSellerDashboard,
   getSellerStatus,
+  getMyProfile,
+  updateMyProfile,
+  uploadMyDocuments,
+  deleteMyDocument,
 } from "../controllers/sellerController.js";
 import {
   getSellerPurchaseRequests,
@@ -16,6 +22,7 @@ import {
   getMyStats,
   getMySalesPerformance,
   getMyPendingInquiries,
+  getMySales,
   getSellerNotifications,
   markSellerNotificationRead,
   markAllSellerNotificationsRead,
@@ -27,15 +34,18 @@ import {
   requireAuth,
   authorizeRoles,
 } from "../middleware/authMiddleware.js";
+import { requireApprovedSeller } from "../middleware/sellerAccess.js";
+import { uploadFields } from "../middleware/uploadMiddleware.js";
 
 const router = Router();
-const upload = multer({ dest: "uploads/sellers/" });
+const loggedIn = [authenticateUser, requireAuth];
+const seller = [authenticateUser, requireAuth, authorizeRoles("SELLER", "DEALER", "ADMIN"), requireApprovedSeller];
 
+// ---- Seller application (buyer -> seller) ----
 router.post(
   "/register",
-  authenticateUser, // attaches req.user if a valid token is present
-  requireAuth, // blocks the request if req.user is still null
-  upload.fields([
+  ...loggedIn,
+  uploadFields([
     { name: "profilePhoto", maxCount: 1 },
     { name: "shopLogo", maxCount: 1 },
     { name: "panCardImage", maxCount: 1 },
@@ -43,42 +53,40 @@ router.post(
   ]),
   registerSeller,
 );
+router.get("/me/status", ...loggedIn, getSellerStatus);
 
-// Seller dashboard (SellerDashboardPage) — logged-in seller's own data
-router.get("/me/stats", authenticateUser, requireAuth, getMyStats);
-router.get("/me/sales-performance", authenticateUser, requireAuth, getMySalesPerformance);
-router.get("/me/inquiries", authenticateUser, requireAuth, getMyPendingInquiries);
+// ---- Business profile (SellerProfile page) ----
+router.get("/me/profile", ...seller, getMyProfile);
+router.patch("/me/profile", ...seller, uploadFields([{ name: "profilePhoto", maxCount: 1 }]), updateMyProfile);
+router.post("/me/documents", ...seller, uploadFields([{ name: "documents", maxCount: 10 }]), uploadMyDocuments);
+router.delete("/me/documents/:documentId", ...seller, deleteMyDocument);
 
-// Seller notifications (bell in SellerNavbar + SellerNotificationsPage)
-router.get("/seller-notifications", authenticateUser, requireAuth, getSellerNotifications);
-router.patch("/seller-notifications/read-all", authenticateUser, requireAuth, markAllSellerNotificationsRead);
-router.patch("/seller-notifications/:id/read", authenticateUser, requireAuth, markSellerNotificationRead);
-router.delete("/seller-notifications/:id", authenticateUser, requireAuth, deleteSellerNotification);
+// ---- Seller dashboard (SellerDashboardPage) ----
+router.get("/me/stats", ...seller, getMyStats);
+router.get("/me/sales-performance", ...seller, getMySalesPerformance);
+router.get("/me/inquiries", ...seller, getMyPendingInquiries);
+router.get("/me/sales", ...seller, getMySales); // own orders + buyer payments (Payments / Invoices pages)
 
-// Field inspections of this seller's vehicles (InspectionRequestsPage)
-router.get("/inspection-requests", authenticateUser, requireAuth, getSellerInspections);
-router.get("/inspection-requests/:id", authenticateUser, requireAuth, getSellerInspectionById);
+// ---- Notifications (bell in SellerNavbar + SellerNotificationsPage) ----
+router.get("/seller-notifications", ...loggedIn, getSellerNotifications);
+router.patch("/seller-notifications/read-all", ...loggedIn, markAllSellerNotificationsRead);
+router.patch("/seller-notifications/:id/read", ...loggedIn, markSellerNotificationRead);
+router.delete("/seller-notifications/:id", ...loggedIn, deleteSellerNotification);
 
-// Purchase requests buyers sent for this seller's vehicles (SellerPurchaseRequestsPage)
-router.get("/purchase-requests", authenticateUser, requireAuth, getSellerPurchaseRequests);
-router.get("/purchase-requests/:id", authenticateUser, requireAuth, getSellerPurchaseRequestById);
-router.patch("/purchase-requests/:id/accept", authenticateUser, requireAuth, acceptPurchaseRequest);
-router.patch("/purchase-requests/:id/reject", authenticateUser, requireAuth, rejectPurchaseRequest);
+// ---- Field inspections of this seller's vehicles (InspectionRequestsPage) ----
+router.get("/inspection-requests", ...seller, getSellerInspections);
+router.get("/inspection-requests/:id", ...seller, getSellerInspectionById);
 
-router.get(
-  "/:sellerId/dashboard",
-  authenticateUser,
-  requireAuth,
-  authorizeRoles("ADMIN", "SUPER_ADMIN"), // note: spread args, matching this file's actual signature
-  getSellerDashboard,
-);
+// ---- Purchase requests buyers sent for this seller's vehicles ----
+router.get("/purchase-requests", ...seller, getSellerPurchaseRequests);
+router.get("/purchase-requests/:id", ...seller, getSellerPurchaseRequestById);
+router.patch("/purchase-requests/:id/accept", ...seller, acceptPurchaseRequest);
+router.patch("/purchase-requests/:id/reject", ...seller, rejectPurchaseRequest);
 
-// Endpoint to get the seller's status (registered, approved, rejected)
-router.get(
-  "/:sellerId/seller-status",
-  authenticateUser,
-  requireAuth,
-  getSellerStatus,
-);
+// ---- Admin ----
+router.get("/:sellerId/dashboard", authenticateUser, requireAuth, authorizeRoles("ADMIN"), getSellerDashboard);
+
+// Older path for the status check — always answers for the logged-in user
+router.get("/:sellerId/seller-status", ...loggedIn, getSellerStatus);
 
 export default router;

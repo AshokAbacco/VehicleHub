@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/components/seller/SellerSidebar.jsx
 // import { useState } from 'react';
 // import {
 //     Home, ShoppingBag, FileText, XCircle, Users, Users2,
@@ -160,18 +161,21 @@ import { useState } from 'react';
 import { Home, ShoppingBag, Archive, Sparkles, X, Bell, LogOut, Users, Car, MessageSquare } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useSellerArea } from '../../hooks/useSellerArea.js';
+import { useGetMyProfileQuery } from '../../services/sellerApiSlice.js';
 
-const sections = [
-    { title: 'Marketplace', accent: 'text-[#001f3f]', items: [{ to: '/seller/dashboard', label: 'Dashboard', icon: Home, end: true }] },
+// Same menu for Sellers (/seller/dashboard) and Dealers (/dealer/dashboard)
+const buildSections = (to, isDealer) => [
+    { title: 'Marketplace', accent: 'text-[#001f3f]', items: [{ to: to(), label: 'Dashboard', icon: Home, end: true }] },
     {
-        title: 'Inventory', accent: 'text-emerald-600',
+        title: isDealer ? 'Shop Inventory' : 'My Listing', accent: 'text-emerald-600',
         items: [
-            { to: '/seller/dashboard/active-listings', label: 'My Vehicles', icon: ShoppingBag },
-            { to: '/seller/dashboard/inventory', label: 'Inventory', icon: ShoppingBag },
-            { to: '/seller/dashboard/sold-vehicles', label: 'Sold Vehicles', icon: Archive },
-            { to: '/seller/dashboard/inspection-requests', label: 'Inspection Requests', icon: Car },
-            { to: '/seller/dashboard/purchase-requests', label: 'Purchase Requests', icon: ShoppingBag },
-            { to: '/seller/dashboard/notifications', label: 'Notifications', icon: Bell },
+            { to: to('active-listings'), label: isDealer ? 'All Vehicles' : 'My Vehicle', icon: ShoppingBag },
+            { to: to('inventory'), label: 'Inventory', icon: ShoppingBag },
+            { to: to('sold-vehicles'), label: 'Sold Vehicles', icon: Archive },
+            { to: to('inspection-requests'), label: 'Inspection Requests', icon: Car },
+            { to: to('purchase-requests'), label: 'Purchase Requests', icon: ShoppingBag },
+            { to: to('notifications'), label: 'Notifications', icon: Bell },
         ],
     },
 ];
@@ -179,6 +183,10 @@ const sections = [
 export const SellerSidebar = ({ forceExpanded = false, isMobile = false, onNavigate, onClose }) => {
     const navigate = useNavigate();
     const { logout, user } = useAuth();
+    const { to, isDealer, label } = useSellerArea();
+    const sections = buildSections(to, isDealer);
+    const { data: profileData } = useGetMyProfileQuery();
+    const profile = profileData?.data;
     const [hoverExpanded, setHoverExpanded] = useState(false);
     const expanded = forceExpanded || hoverExpanded;
 
@@ -203,7 +211,7 @@ export const SellerSidebar = ({ forceExpanded = false, isMobile = false, onNavig
                 </div>
                 {expanded && (
                     <div className="min-w-0 flex-1 animate-fadeInUp opacity-0" style={{ animationDelay: '50ms' }}>
-                        <p className="truncate text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">Seller panel</p>
+                        <p className="truncate text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400">{label} panel</p>
                         <h2 className="truncate text-sm font-extrabold text-slate-900">VehicleHub Pro</h2>
                     </div>
                 )}
@@ -222,10 +230,14 @@ export const SellerSidebar = ({ forceExpanded = false, isMobile = false, onNavig
                 <div className="mx-3 mt-4 animate-fadeInUp opacity-0 overflow-hidden rounded-2xl border border-[#001f3f]/10 bg-gradient-to-br from-[#e6f2ff] to-white p-4 shadow-sm" style={{ animationDelay: '100ms' }}>
                     <div className="flex items-center gap-2">
                         <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-500" />
-                        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#001f3f]/70">Business</p>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#001f3f]/70">{isDealer ? 'Dealer shop' : 'Individual seller'}</p>
                     </div>
-                    <p className="mt-2 truncate text-sm font-extrabold text-slate-900">{user?.businessName || 'RK Dealerships'}</p>
-                    <p className="mt-1 text-xs font-medium text-slate-500">Premium plan • Auto-renew</p>
+                    <p className="mt-2 truncate text-sm font-extrabold text-slate-900">
+                        {(isDealer ? profile?.businessName : null) || profile?.ownerName || user?.fullName || user?.name || label}
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                        {isDealer ? 'Manage all your shop\'s vehicles' : 'One vehicle listed at a time'}
+                    </p>
                 </div>
             )}
 

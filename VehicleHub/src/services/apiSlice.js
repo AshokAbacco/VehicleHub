@@ -1,7 +1,7 @@
 // VehicleHub/VehicleHub/src/services/apiSlice.js
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
-const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 const normalizedBaseUrl = rawBaseUrl.replace(/\/$/, "");
 const apiBaseUrl = normalizedBaseUrl.endsWith("/api")
   ? normalizedBaseUrl
@@ -32,6 +32,12 @@ export const apiSlice = createApi({
     "Report",
     "PurchaseRequest",
     "AdminBuyers",
+    "AdminData",
+    "SellerStatus",
+    "SellerProfile",
+    "SellerNotification",
+    "Inspection",
+    "Conversation",
   ],
   endpoints: () => ({}),
 });

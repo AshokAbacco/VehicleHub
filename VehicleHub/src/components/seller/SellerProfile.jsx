@@ -167,7 +167,7 @@ export const SellerProfilePage = () => {
 
     return (
         <div className="space-y-6 text-slate-900">
-            <Helmet><title>My Profile | VehicleHub Seller</title></Helmet>
+            <Helmet><title>My Profile | VehicleHub</title></Helmet>
 
             {/* Header / cover card */}
             <div className="animate-fadeInUp overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
@@ -280,8 +280,9 @@ export const SellerProfilePage = () => {
                             <Field label="Phone">
                                 <input disabled={!editing} type="tel" className={inputClass} value={form.phone} onChange={(e) => set('phone', e.target.value)} />
                             </Field>
-                            <Field label="Seller Type">
-                                <input disabled={!editing} className={inputClass} value={form.sellerType} onChange={(e) => set('sellerType', e.target.value)} />
+                            {/* Account type decides Seller vs Dealer access — set by the admin-approved application, not editable */}
+                            <Field label="Account Type">
+                                <input disabled className={inputClass} value={form.sellerType === 'Dealer' ? 'Dealer (shop — many vehicles)' : 'Seller (individual — one vehicle)'} />
                             </Field>
                             <Field label="GST Number">
                                 <input disabled={!editing} className={inputClass} value={form.gstNumber} onChange={(e) => set('gstNumber', e.target.value)} />

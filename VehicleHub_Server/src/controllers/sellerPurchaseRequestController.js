@@ -25,7 +25,7 @@ const include = {
   buyer: { select: { id: true, fullName: true, email: true, phone: true, createdAt: true } },
 };
 
-const isAdmin = (user) => ["ADMIN", "SUPER_ADMIN"].includes(user?.role);
+const isAdmin = (user) => ["ADMIN"].includes(user?.role);
 
 // Seller sees requests for their own vehicles (admins see all)
 const ownerFilter = (user) => (isAdmin(user) ? {} : { sellerId: user.id });

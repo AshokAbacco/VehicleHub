@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub_Server/src/routes/inquiryRoutes.js
 import express from "express";
 import * as inquiryController from "../controllers/inquiryController.js";
 import {
@@ -12,19 +13,19 @@ router.get("/mine", authenticateUser, inquiryController.getMyInquiries);
 router.patch(
   "/:id/accept",
   authenticateUser,
-  authorizeRoles("SELLER", "ADMIN", "SUPER_ADMIN"),
+  authorizeRoles("SELLER", "DEALER", "ADMIN"),
   inquiryController.acceptInquiry,
 );
 router.patch(
   "/:id/reject",
   authenticateUser,
-  authorizeRoles("SELLER", "ADMIN", "SUPER_ADMIN"),
+  authorizeRoles("SELLER", "DEALER", "ADMIN"),
   inquiryController.rejectInquiry,
 );
 router.patch(
   "/:id/close",
   authenticateUser,
-  authorizeRoles("SELLER", "ADMIN", "SUPER_ADMIN"),
+  authorizeRoles("SELLER", "DEALER", "ADMIN"),
   inquiryController.closeInquiry,
 );
 

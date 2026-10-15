@@ -1,8 +1,9 @@
+// VehicleHub/VehicleHub/src/components/admin/AdminSidebar.jsx
 import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, CheckSquare, Car, Users, UserCircle2, IndianRupee,
-    ShoppingCart, MessageSquare, Bell, Settings, ShieldCheck, LogOut, X, PlusCircle
+    ShoppingCart, MessageSquare, Bell, Settings, ShieldCheck, LogOut, X, PlusCircle, Receipt, ClipboardCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 
@@ -14,12 +15,19 @@ const sections = [
         items: [
             { to: '/admin/dashboard/all-vehicles', label: 'All Vehicles', icon: Car },
             { to: '/admin/dashboard/add-vehicle', label: 'Add Vehicle', icon: PlusCircle },
-            { to: '/admin/dashboard/sellers', label: 'Sellers', icon: UserCircle2 },
+            { to: '/admin/dashboard/sellers', label: 'Sellers', icon: UserCircle2, badgeKey: 'sellers' },
             { to: '/admin/dashboard/buyers', label: 'Buyers', icon: Users },
             { to: '/admin/dashboard/carts', label: 'Carts & Wishlist', icon: ShoppingCart },
+            { to: '/admin/dashboard/inspections', label: 'Field Inspections', icon: ClipboardCheck },
         ],
     },
-    { title: 'Finance', items: [{ to: '/admin/dashboard/revenue', label: 'Revenue', icon: IndianRupee }] },
+    {
+        title: 'Finance',
+        items: [
+            { to: '/admin/dashboard/orders', label: 'Orders & Sales', icon: Receipt },
+            { to: '/admin/dashboard/revenue', label: 'Revenue', icon: IndianRupee },
+        ],
+    },
     {
         title: 'Engagement',
         items: [
@@ -30,7 +38,8 @@ const sections = [
     { title: 'System', items: [{ to: '/admin/dashboard/settings', label: 'Settings', icon: Settings }] },
 ];
 
-export const AdminSidebar = ({ pendingCount = 0, forceExpanded = false, isMobile = false, onNavigate, onClose }) => {
+// badges: { pending: vehicles awaiting approval, sellers: seller applications awaiting review }
+export const AdminSidebar = ({ badges = {}, forceExpanded = false, isMobile = false, onNavigate, onClose }) => {
     const navigate = useNavigate();
     const { logout } = useAuth();
     const [hoverExpanded, setHoverExpanded] = useState(false);
@@ -83,7 +92,7 @@ export const AdminSidebar = ({ pendingCount = 0, forceExpanded = false, isMobile
                         <div className="space-y-1">
                             {section.items.map((item) => {
                                 const Icon = item.icon;
-                                const badge = item.badgeKey === 'pending' ? pendingCount : null;
+                                const badge = item.badgeKey ? badges[item.badgeKey] : null;
                                 return (
                                     <NavLink
                                         key={item.to}

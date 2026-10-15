@@ -4,6 +4,7 @@
 //   GET    /api/sellers/me/stats               -> { success, stats }
 //   GET    /api/sellers/me/sales-performance   -> { success, data: [{ label, sales, revenue }] }  (last 8 weeks)
 //   GET    /api/sellers/me/inquiries           -> { success, inquiries: [...] }  (pending purchase requests)
+//   GET    /api/sellers/me/sales               -> { success, data: { orders, payments, totals } }
 //   GET    /api/sellers/seller-notifications            -> { success, data: { notifications, unreadCount } }
 //   PATCH  /api/sellers/seller-notifications/read-all
 //   PATCH  /api/sellers/seller-notifications/:id/read
@@ -188,6 +189,79 @@ export const deleteSellerNotification = async (req, res, next) => {
     });
     if (!count) return fail(res, "Notification not found", 404);
     return res.json({ success: true, message: "Notification deleted" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ------------------------------------------------------------
+// GET /api/sellers/me/sales -> { success, data: { orders, payments, totals } }
+// The signed-in seller's own orders (with buyer + vehicle) and the buyer payments made on them.
+// Used by the seller Payments and Invoices pages.
+// ------------------------------------------------------------
+export const getMySales = async (req, res, next) => {
+  try {
+    const sellerId = req.user.id;
+    const orders = await prisma.order.findMany({
+      where: { sellerId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        vehicle: { select: { id: true, title: true, brand: true, model: true } },
+        buyer: { select: { id: true, fullName: true, email: true, phone: true } },
+        payments: { orderBy: { createdAt: "desc" } },
+      },
+    });
+
+    const buyerName = (b) => b?.fullName || b?.email || b?.phone || "Buyer";
+    const invoiceNo = (o) => `INV-${new Date(o.createdAt).getFullYear()}-${o.id.slice(-6).toUpperCase()}`;
+
+    const orderRows = orders.map((o) => {
+      const paid = o.payments.filter((p) => p.status === "SUCCESS").reduce((s, p) => s + p.amount, 0);
+      const refunded = o.payments.filter((p) => p.status === "REFUNDED").reduce((s, p) => s + p.amount, 0);
+      const commission = o.commission ?? 0;
+      return {
+        id: o.id,
+        invoiceNo: invoiceNo(o),
+        title: o.vehicle?.title || "Vehicle",
+        vehicleId: o.vehicleId,
+        customer: buyerName(o.buyer),
+        buyerEmail: o.buyer?.email || null,
+        buyerPhone: o.buyer?.phone || null,
+        amount: o.amount,
+        commission,
+        netAmount: o.amount - commission,
+        paidAmount: paid,
+        refundedAmount: refunded,
+        balance: Math.max(0, o.amount - paid),
+        status: o.status,
+        createdAt: o.createdAt,
+        completedAt: o.completedAt,
+      };
+    });
+
+    const payments = orders.flatMap((o) =>
+      o.payments.map((p) => ({
+        id: p.id,
+        reference: p.reference || p.id.slice(-10).toUpperCase(),
+        orderId: o.id,
+        invoiceNo: invoiceNo(o),
+        title: o.vehicle?.title || "Vehicle",
+        customer: buyerName(o.buyer),
+        amount: p.amount,
+        method: p.provider,
+        status: p.status,
+        createdAt: p.createdAt,
+      }))
+    ).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const totals = {
+      orders: orderRows.length,
+      completedSales: orderRows.filter((o) => o.status === "COMPLETED").reduce((s, o) => s + o.amount, 0),
+      received: payments.filter((p) => p.status === "SUCCESS").reduce((s, p) => s + p.amount, 0),
+      pending: payments.filter((p) => p.status === "PENDING").reduce((s, p) => s + p.amount, 0),
+    };
+
+    return res.json({ success: true, data: { orders: orderRows, payments, totals } });
   } catch (error) {
     next(error);
   }

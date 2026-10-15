@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub_Server/src/validations/userValidation.js
 import Joi from "joi";
 
 export const updateUserSchema = Joi.object({
@@ -8,14 +9,11 @@ export const updateUserSchema = Joi.object({
   avatar: Joi.string().optional(),
   role: Joi.string()
     .valid(
-      "SUPER_ADMIN",
       "ADMIN",
       "SELLER",
-      "BUYER",
       "DEALER",
+      "BUYER",
       "INSPECTOR",
-      "FINANCE",
-      "SUPPORT",
     )
     .optional(),
 });

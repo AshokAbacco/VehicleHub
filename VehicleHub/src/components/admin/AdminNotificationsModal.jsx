@@ -1,13 +1,37 @@
-// components/admin/AdminNotificationsModal.jsx
+// VehicleHub/VehicleHub/src/components/admin/AdminNotificationsModal.jsx
+// Bell panel: seller applications waiting for review + the admin's real notifications.
 import { useState } from "react";
-import { X, UserPlus, Bell as BellIcon } from "lucide-react";
-import { useGetPendingSellersQuery } from "../../services/adminApiSlice.js";
+import { useNavigate } from "react-router-dom";
+import { X, UserPlus, Bell as BellIcon, Loader2 } from "lucide-react";
+import {
+    useGetPendingSellersQuery,
+    useGetAdminNotificationsQuery,
+    useMarkAdminNotificationReadMutation,
+    useMarkAllAdminNotificationsReadMutation,
+} from "../../services/adminApiSlice.js";
 import { SellerReviewModal } from "./SellerReviewModal.jsx";
+import { adminNotificationTarget } from "./adminNotificationLinks.js";
 
-export const AdminNotificationsModal = ({ notifications, onClose, onMarkAllRead }) => {
-    const { data, refetch } = useGetPendingSellersQuery(undefined, { pollingInterval: 15000 });
-    const pendingSellers = data?.sellers || [];
+export const AdminNotificationsModal = ({ onClose }) => {
+    const navigate = useNavigate();
+    const { data: sellersData } = useGetPendingSellersQuery(undefined, { pollingInterval: 30000 });
+    const { data: notifData, isLoading } = useGetAdminNotificationsQuery(undefined, { pollingInterval: 30000 });
+    const [markRead] = useMarkAdminNotificationReadMutation();
+    const [markAllRead, { isLoading: markingAll }] = useMarkAllAdminNotificationsReadMutation();
+    const pendingSellers = sellersData?.data?.sellers || sellersData?.sellers || [];
+    const notifications = notifData?.data?.notifications || [];
+    const unreadCount = notifData?.data?.unreadCount || 0;
     const [reviewingId, setReviewingId] = useState(null);
+
+    const openNotification = (n) => {
+        if (!n.isRead) markRead(n.id);
+        const target = adminNotificationTarget(n);
+        if (target.sellerId) return setReviewingId(target.sellerId);
+        if (target.to) {
+            onClose();
+            navigate(target.to);
+        }
+    };
 
     return (
         <>
@@ -17,17 +41,19 @@ export const AdminNotificationsModal = ({ notifications, onClose, onMarkAllRead 
                     <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
                         <h2 className="text-sm font-bold text-slate-900">Notifications</h2>
                         <div className="flex items-center gap-2">
-                            <button onClick={onMarkAllRead} className="text-xs font-semibold text-[#001f3f] hover:underline">
-                                Mark all read
-                            </button>
-                            <button onClick={onClose} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100">
+                            {unreadCount > 0 && (
+                                <button onClick={() => markAllRead()} disabled={markingAll} className="text-xs font-semibold text-[#001f3f] hover:underline disabled:opacity-60">
+                                    Mark all read
+                                </button>
+                            )}
+                            <button onClick={onClose} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Close">
                                 <X size={16} />
                             </button>
                         </div>
                     </div>
 
                     <div className="flex-1 overflow-y-auto">
-                        {/* Live: seller registrations awaiting approval */}
+                        {/* Seller registrations awaiting approval */}
                         {pendingSellers.length > 0 && (
                             <div>
                                 <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -47,10 +73,10 @@ export const AdminNotificationsModal = ({ notifications, onClose, onMarkAllRead 
                                                 {s.ownerName} {s.businessName && `— ${s.businessName}`}
                                             </p>
                                             <p className="truncate text-xs text-slate-500">
-                                                Wants to become a seller · {s.city}, {s.state}
+                                                Wants to become a seller · {[s.city, s.state].filter(Boolean).join(", ")}
                                             </p>
                                             <p className="mt-0.5 text-[11px] text-slate-400">
-                                                {s.submittedAt ? new Date(s.submittedAt).toLocaleString() : ""}
+                                                {s.submittedAt ? new Date(s.submittedAt).toLocaleString("en-IN") : ""}
                                             </p>
                                         </div>
                                         <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
@@ -61,39 +87,52 @@ export const AdminNotificationsModal = ({ notifications, onClose, onMarkAllRead 
                             </div>
                         )}
 
-                        {/* Existing generic/mock notifications */}
+                        {/* The admin's notifications */}
                         <div>
-                            {pendingSellers.length > 0 && (
-                                <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                                    General
-                                </p>
+                            {pendingSellers.length > 0 && notifications.length > 0 && (
+                                <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">General</p>
                             )}
-                            {notifications.map((n) => (
-                                <div key={n.id} className="flex items-start gap-3 border-b border-slate-50 p-3.5">
-                                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-                                        <BellIcon size={16} />
-                                    </span>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-semibold text-slate-900">{n.title}</p>
-                                        <p className="truncate text-xs text-slate-500">{n.message}</p>
-                                    </div>
-                                </div>
-                            ))}
+                            {isLoading ? (
+                                <div className="flex h-24 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-[#001f3f]" /></div>
+                            ) : (
+                                notifications.slice(0, 30).map((n) => (
+                                    <button
+                                        key={n.id}
+                                        onClick={() => openNotification(n)}
+                                        className={`flex w-full items-start gap-3 border-b border-slate-50 p-3.5 text-left hover:bg-slate-50 ${!n.isRead ? 'bg-[#e6f2ff]/40' : ''}`}
+                                    >
+                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+                                            <BellIcon size={16} />
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                                                <span className="truncate">{n.title}</span>
+                                                {!n.isRead && <span className="h-2 w-2 shrink-0 rounded-full bg-[#001f3f]" />}
+                                            </p>
+                                            <p className="line-clamp-2 text-xs text-slate-500">{n.message}</p>
+                                            <p className="mt-0.5 text-[11px] text-slate-400">{n.time}</p>
+                                        </div>
+                                    </button>
+                                ))
+                            )}
                         </div>
 
-                        {pendingSellers.length === 0 && notifications.length === 0 && (
+                        {!isLoading && pendingSellers.length === 0 && notifications.length === 0 && (
                             <p className="p-6 text-center text-sm text-slate-400">You're all caught up 🎉</p>
                         )}
                     </div>
+
+                    <button
+                        onClick={() => { onClose(); navigate('/admin/dashboard/notifications'); }}
+                        className="border-t border-slate-100 py-2.5 text-xs font-semibold text-[#001f3f] hover:bg-slate-50"
+                    >
+                        View all notifications
+                    </button>
                 </div>
             </div>
 
             {reviewingId && (
-                <SellerReviewModal
-                    sellerId={reviewingId}
-                    onClose={() => setReviewingId(null)}
-                    onDecided={() => refetch()}
-                />
+                <SellerReviewModal sellerId={reviewingId} onClose={() => setReviewingId(null)} onDecided={() => setReviewingId(null)} />
             )}
         </>
     );

@@ -12,6 +12,7 @@ import {
     useGetSalesPerformanceQuery,
     useGetSellerInquiriesQuery,
 } from '../../services/sellerApiSlice.js';
+import { useSellerArea } from '../../hooks/useSellerArea.js';
 
 // Short Indian format so big amounts fit the stat card: ₹85,000 · ₹18.07 L · ₹1.25 Cr
 const formatRevenue = (amount) => {
@@ -22,6 +23,7 @@ const formatRevenue = (amount) => {
 };
 
 export const SellerDashboardPage = () => {
+    const area = useSellerArea();
     const { data: statsData, isLoading: statsLoading } = useGetSellerStatsQuery();
     const { data: inventoryData, isLoading: inventoryLoading } = useGetSellerInventoryQuery();
     const { data: salesData, isLoading: salesLoading } = useGetSalesPerformanceQuery();
@@ -33,12 +35,12 @@ export const SellerDashboardPage = () => {
     const inquiries = inquiryData?.inquiries || [];
 
     const statCards = [
-        { label: 'Total Listings', value: stats?.total ?? '—', to: '/seller/dashboard/inventory?stage=all' },
-        { label: 'Approved', value: stats?.approved ?? '—', to: '/seller/dashboard/inventory?stage=approved' },
-        { label: 'Pending', value: stats?.pending ?? '—', to: '/seller/dashboard/inventory?stage=pending' },
-        { label: 'Sold', value: stats?.sold ?? '—', to: '/seller/dashboard/inventory?stage=sold' },
-        { label: 'Rejected', value: stats?.rejected ?? '—', to: '/seller/dashboard/inventory?stage=rejected' },
-        { label: 'Pending Inquiries', value: stats?.pendingInquiries ?? '—', to: '/seller/dashboard/purchase-requests' },
+        { label: 'Total Listings', value: stats?.total ?? '—', to: area.to('inventory') + '?stage=all' },
+        { label: 'Approved', value: stats?.approved ?? '—', to: area.to('inventory') + '?stage=approved' },
+        { label: 'Pending', value: stats?.pending ?? '—', to: area.to('inventory') + '?stage=pending' },
+        { label: 'Sold', value: stats?.sold ?? '—', to: area.to('inventory') + '?stage=sold' },
+        { label: 'Rejected', value: stats?.rejected ?? '—', to: area.to('inventory') + '?stage=rejected' },
+        { label: 'Pending Inquiries', value: stats?.pendingInquiries ?? '—', to: area.to('purchase-requests') },
         { label: 'Total Revenue', value: formatRevenue(stats?.totalRevenue) },
     ];
 
@@ -48,7 +50,7 @@ export const SellerDashboardPage = () => {
     return (
         <div className="w-full space-y-4 sm:space-y-6">
             <Helmet>
-                <title>Seller Dashboard | VehicleHub</title>
+                <title>{`${area.label} Dashboard | VehicleHub`}</title>
             </Helmet>
 
             {/* Gradient hero header */}
@@ -60,8 +62,12 @@ export const SellerDashboardPage = () => {
                         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.25em] text-cyan-200">
                             <LayoutDashboard size={13} /> {greeting}
                         </p>
-                        <h1 className="mt-1 text-2xl font-bold text-white sm:text-3xl">Seller Dashboard</h1>
-                        <p className="mt-1 text-sm text-white/70">Track your listings, sales, and buyer interest.</p>
+                        <h1 className="mt-1 text-2xl font-bold text-white sm:text-3xl">{area.label} Dashboard</h1>
+                        <p className="mt-1 text-sm text-white/70">
+                            {area.isDealer
+                                ? "Manage your shop's vehicles, sales, and buyer interest."
+                                : 'Track your vehicle listing, sale, and buyer interest. Seller accounts list one vehicle at a time.'}
+                        </p>
                     </div>
                     <div className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-white backdrop-blur-sm">
                         <TrendingUp size={16} className="text-emerald-300" />

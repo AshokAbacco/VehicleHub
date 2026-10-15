@@ -1,14 +1,10 @@
+// VehicleHub/VehicleHub_Server/src/controllers/OTPController.js
 import { prisma } from "../config/db.js";
 import jwt from "jsonwebtoken";
 import { jwtSecret } from "../config/jwt.js";
 import bcrypt from "bcryptjs";
 
-const normalizePhone = (value) => {
-  if (!value) return "";
-  const digits = String(value).replace(/\D/g, "");
-  if (!digits) return "";
-  return digits.length === 10 ? `+91${digits}` : `+${digits}`;
-};
+import { normalizePhone } from "../utils/phone.js";
 
 const createUserRecord = async (phone) => {
   const normalizedPhone = normalizePhone(phone);
@@ -115,6 +111,7 @@ export const verifyOTP = async (req, res) => {
       needsFullName: !user.fullName?.trim(),
       user: {
         ...user,
+        password: undefined, // never send the password hash to the browser
         name: user.fullName || user.lastName || "User",
       },
     });
@@ -148,7 +145,8 @@ export const completeProfile = async (req, res) => {
       data: {
         fullName: fullName.trim(),
         lastName: lastName?.trim() || null,
-        phone: phone?.trim() || null,
+        // only when given — never blank out the number a phone sign-in depends on
+        ...(normalizePhone(phone) ? { phone: normalizePhone(phone) } : {}),
       },
     });
 

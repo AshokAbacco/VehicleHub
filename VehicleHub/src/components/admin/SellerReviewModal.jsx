@@ -1,7 +1,9 @@
-// components/admin/SellerReviewModal.jsx
+// VehicleHub/VehicleHub/src/components/admin/SellerReviewModal.jsx
 import { useState } from "react";
-import { toast } from "react-toastify";
-import { X } from "lucide-react";
+import { toast } from "react-hot-toast"; // the app renders react-hot-toast's <Toaster>
+import { X, FileText } from "lucide-react";
+
+const isImage = (url) => /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(String(url || "")) || String(url || "").startsWith("data:image");
 import {
   useGetSellerRegistrationDetailQuery,
   useApproveSellerMutation,
@@ -67,7 +69,7 @@ export const SellerReviewModal = ({ sellerId, onClose, onDecided }) => {
             <DetailRow label="Email" value={seller.email} />
             <DetailRow label="Phone" value={seller.phone} />
             <DetailRow label="Address" value={seller.address} />
-            <DetailRow label="City / State / Pincode" value={`${seller.city}, ${seller.state} - ${seller.pincode}`} />
+            <DetailRow label="City / State / Pincode" value={[seller.city, seller.state].filter(Boolean).join(", ") + (seller.pincode ? ` - ${seller.pincode}` : "")} />
             <DetailRow label="GST Number" value={seller.gstNumber} />
             <DetailRow label="PAN Number" value={seller.panNumber} />
             <DetailRow label="Years in Business" value={seller.yearsInBusiness} />
@@ -89,7 +91,11 @@ export const SellerReviewModal = ({ sellerId, onClose, onDecided }) => {
                     rel="noreferrer"
                     className="rounded-xl border border-slate-200 p-2 text-center text-xs hover:border-[#001f3f]/40"
                   >
-                    <img src={doc.fileUrl} alt={doc.type} className="mb-1 h-20 w-full rounded object-cover" />
+                    {isImage(doc.fileUrl) ? (
+                      <img src={doc.fileUrl} alt={doc.type} className="mb-1 h-20 w-full rounded object-cover" />
+                    ) : (
+                      <span className="mb-1 flex h-20 w-full items-center justify-center rounded bg-slate-50 text-slate-400"><FileText size={20} /></span>
+                    )}
                     {doc.type}
                   </a>
                 ))}

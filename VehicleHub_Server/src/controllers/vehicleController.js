@@ -1,100 +1,29 @@
-// import vehicleService from '../services/vehicleService.js';
-// import { sendSuccess, sendError  } from '../utils/response.js';
-// import { validate  } from '../middleware/validationMiddleware.js';
-// import { createVehicleSchema  } from '../validations/vehicleValidation.js';
-
-// export const createVehicle = [
-//   validate(createVehicleSchema),
-//   async (req, res, next) => {
-//     try {
-//       const vehicle = await vehicleService.createVehicle({ ...req.body, sellerId: req.user?.id || req.body.sellerId });
-//       sendSuccess(res, 'Vehicle created successfully', vehicle, 201);
-//     } catch (error) {
-//       next(error);
-//     }
-//   },
-// ];
-
-// export const updateVehicle = async (req, res, next) => {
-//   try {
-//     const vehicle = await vehicleService.updateVehicle(req.params.id, req.body);
-//     sendSuccess(res, 'Vehicle updated successfully', vehicle);
-//   } catch (error) {
-//     next(error);
-//   }
-// };
-
-// export const deleteVehicle = async (req, res, next) => {
-//   try {
-//     await vehicleService.deleteVehicle(req.params.id);
-//     sendSuccess(res, 'Vehicle deleted successfully');
-//   } catch (error) {
-//     next(error);
-//   }
-// };
-
-// export const getAllVehicles = async (req, res, next) => {
-//   try {
-//     const data = await vehicleService.getAllVehicles(req.query);
-//     sendSuccess(res, 'Vehicles fetched successfully', data);
-//   } catch (error) {
-//     next(error);
-//   }
-// };
-
-// export const getVehicleById = async (req, res, next) => {
-//   try {
-//     const vehicle = await vehicleService.getVehicleById(req.params.id);
-//     if (!vehicle) return sendError(res, 'Vehicle not found', 404);
-//     sendSuccess(res, 'Vehicle fetched successfully', vehicle);
-//   } catch (error) {
-//     next(error);
-//   }
-// };
-
-// export const getFeaturedVehicles = async (req, res, next) => {
-//   try {
-//     const vehicles = await vehicleService.getAllVehicles({ ...req.query, isFeatured: true });
-//     sendSuccess(res, 'Featured vehicles fetched successfully', vehicles);
-//   } catch (error) {
-//     next(error);
-//   }
-// };
-
-// export const searchVehicle = async (req, res, next) => {
-//   try {
-//     const data = await vehicleService.getAllVehicles(req.query);
-//     sendSuccess(res, 'Search results fetched successfully', data);
-//   } catch (error) {
-//     next(error);
-//   }
-// };
-
-// export const filterVehicle = async (req, res, next) => {
-//   try {
-//     const data = await vehicleService.getAllVehicles(req.query);
-//     sendSuccess(res, 'Filtered vehicles fetched successfully', data);
-//   } catch (error) {
-//     next(error);
-//   }
-// };
-
-// export const uploadImages = async (req, res) => sendSuccess(res, 'Vehicle images upload ready');
-// export const approveVehicle = async (req, res) => sendSuccess(res, 'Vehicle approved');
-// export const rejectVehicle = async (req, res) => sendSuccess(res, 'Vehicle rejected');
-// export const soldVehicle = async (req, res) => sendSuccess(res, 'Vehicle marked sold');
-// export const pendingVehicle = async (req, res) => sendSuccess(res, 'Vehicle marked pending');
+// VehicleHub/VehicleHub_Server/src/controllers/vehicleController.js
+// ============================================================
+// VEHICLES — mounted at /api/vehicles (routes/vehicleRoutes.js)
+//
+// Public:   GET /, /homepage, /featured, /search, /filter, /:id
+// Seller / Dealer: POST /   (approved accounts; listing goes to admin approval.
+//                            A Seller may have one open listing at a time; a Dealer has no limit)
+//           PUT  /:id         (own vehicles only; a live listing goes back to approval)
+//           DELETE /:id, DELETE /:id/images, PATCH /:id/sold, PATCH /:id/pending (own only)
+//           GET  /my/listings, DELETE /my/listings/:id
+// Admin:    everything above for any vehicle + GET /admin/pending,
+//           PATCH /:id/approve, PATCH /:id/reject
+// ============================================================
 import vehicleService from "../services/vehicleService.js";
-import cloudinaryService from "../services/cloudinaryService.js";
 import { sendSuccess, sendError } from "../utils/response.js";
 import { prisma } from "../config/db.js";
-/**
- * CREATE — expects multipart/form-data:
- *   - text fields matching the Vehicle model
- *   - "images"           -> multiple files (multer .array('images'))
- *   - "rcFront"           -> single file (multer .single or another .array with maxCount:1)
- *   - "insuranceDocument" -> single file
- */
+import { storeUpload, deleteStoredFiles } from "../utils/storeUpload.js";
+import { toVehicleDTO, categoryEmoji } from "../utils/vehicleDto.js";
+import { listingAllowance, SELLER_LIMIT_MESSAGE } from "../utils/sellerAccount.js";
+
+const isAdminUser = (user) => user?.role === "ADMIN";
+// Every stored file a vehicle points to (photos + documents)
+const vehicleFiles = (v) => [...(v?.images || []), ...(v?.documentImages || []), v?.rcFront, v?.insuranceDocument, v?.thumbnail].filter(Boolean);
+// What the listing shows as the seller type — always taken from the account, never from the form
+const accountSellerType = (role) => (role === "DEALER" ? "Dealer" : "Individual");
+
 // ---- helpers: form-data values always arrive as strings ----
 const toBool = (v) =>
   v === true || ["yes", "true", "1", "on"].includes(String(v ?? "").trim().toLowerCase());
@@ -113,7 +42,17 @@ const toDate = (v) => {
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? undefined : d;
 };
+const toStr = (v) => (v === undefined || v === null ? undefined : String(v).trim() || null);
 const pick = (...values) => values.find((v) => v !== undefined && v !== null && v !== "");
+const parseJsonArray = (v) => {
+  if (v === undefined) return undefined;
+  try {
+    const parsed = JSON.parse(v);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
 
 // Category in the form is a name ("Car", "Bike"...). Vehicle.category is a RELATION,
 // so resolve it to Category.id (create the category the first time it is used).
@@ -133,252 +72,365 @@ const resolveCategoryId = async (categoryId, categoryName) => {
   return created.id;
 };
 
+// Feature checkbox label -> boolean column
+const FEATURE_FLAGS = {
+  abs: "ABS",
+  sunroof: "Sunroof",
+  alloyWheels: "Alloy Wheels",
+  bluetooth: "Bluetooth",
+  touchscreen: "Touch Screen",
+  reverseCamera: "Reverse Camera",
+  parkingSensors: "Parking Sensors",
+  powerSteering: "Power Steering",
+  powerWindows: "Power Windows",
+  ac: "Air Conditioner",
+  cruiseControl: "Cruise Control",
+  keylessEntry: "Keyless Entry",
+};
+
+/**
+ * Map Add/Edit Vehicle form fields (AddVehicleForm / EditVehicleModal) to Vehicle columns.
+ * partial = true (edit): only fields present in the request are changed.
+ */
+const vehicleDataFromForm = (b, { partial = false } = {}) => {
+  const out = {};
+  const has = (keys) => keys.some((k) => b[k] !== undefined);
+  const set = (field, keys, convert = toStr) => {
+    if (partial && !has(keys)) return;
+    out[field] = convert(pick(...keys.map((k) => b[k])));
+  };
+
+  set("title", ["title"]);
+  set("description", ["description"]);
+  set("brand", ["brand"]);
+  set("model", ["model"]);
+  set("variant", ["variant"]);
+  set("vehicleType", ["category"]);
+
+  set("price", ["price"], toFloat);
+  set("expectedPrice", ["expectedPrice"], toFloat);
+  set("negotiable", ["negotiable"], toBool);
+  set("emiAvailable", ["emiAvailable"], toBool);
+
+  set("year", ["year", "manufacturingYear"], toInt);
+  set("registrationYear", ["registrationYear"], toInt);
+  set("mileage", ["kmDriven"], toInt); // Vehicle.mileage = KM driven (the form's "mileage" is km/l)
+  set("fuelType", ["fuelType"]);
+  set("transmission", ["transmission"]);
+  set("bodyType", ["bodyType"]);
+  set("ownership", ["ownership"], toInt); // "1st Owner" -> 1
+  set("color", ["color"]);
+  set("engineCapacity", ["engineCapacity"]);
+  set("seatingCapacity", ["seatingCapacity"], toInt);
+  set("registrationNumber", ["registrationNumber"]);
+  set("registrationState", ["registrationState"]);
+  set("vinNumber", ["vin", "vinNumber"]);
+  set("location", ["location", "area"]);
+  set("city", ["city"]);
+  set("state", ["state"]);
+  set("pincode", ["pincode"]);
+
+  set("insuranceCompany", ["insuranceCompany"]);
+  set("insuranceExpiry", ["insuranceExpiry"], toDate);
+  set("insuranceType", ["insuranceType"]);
+  set("fitnessValidTill", ["fitnessValidTill"], toDate);
+  set("pollutionValidTill", ["pollutionValidTill"], toDate);
+
+  set("airbags", ["airbags"], toInt);
+
+  // Owner / seller contact shown on the listing
+  set("ownerName", ["sellerName", "dealerName", "ownerName"]);
+  set("ownerPhone", ["mobileNumber", "ownerPhone"]);
+  set("ownerEmail", ["email", "ownerEmail"]);
+  set("sellerType", ["sellerType"]);
+
+  // Condition
+  set("condition", ["vehicleCondition", "condition"]);
+  set("engineCondition", ["engineCondition"]);
+  set("tyreCondition", ["tyreCondition"]);
+  set("batteryCondition", ["batteryCondition"]);
+  set("floodDamage", ["floodDamage"], toBool);
+  set("accidental", ["accidentHistory", "accidental"], toBool);
+
+  // Extra details (form sends Yes/No for service book; Vehicle.serviceBook is a file URL)
+  set("serviceHistory", ["serviceBook", "serviceHistory"], toBool);
+  set("loanRunning", ["loanPending", "loanRunning"], toBool);
+  set("nocAvailable", ["nocAvailable"], toBool);
+  set("numberOfKeys", ["numberOfKeys"], toInt);
+
+  // Features: the checkbox list also drives the boolean columns
+  if (!partial || b.features !== undefined) {
+    const features = Array.isArray(b.features) ? b.features : b.features ? [b.features] : [];
+    out.features = features;
+    const hasFeature = (name) => features.some((f) => String(f).toLowerCase() === name.toLowerCase());
+    Object.entries(FEATURE_FLAGS).forEach(([field, label]) => {
+      out[field] = toBool(b[field]) || hasFeature(label);
+    });
+  }
+
+  // Strip undefined so Prisma keeps current values / schema defaults
+  Object.keys(out).forEach((k) => out[k] === undefined && delete out[k]);
+  return out;
+};
+
+const uploadMany = async (files, folder, req) => {
+  const urls = [];
+  for (const file of files || []) urls.push(await storeUpload(file, folder, req));
+  return urls.filter(Boolean);
+};
+
+const detailInclude = {
+  category: { select: { id: true, name: true } },
+  seller: {
+    select: {
+      id: true,
+      fullName: true,
+      phone: true,
+      email: true,
+      sellerProfile: {
+        select: { businessName: true, ownerName: true, sellerType: true, verificationStatus: true },
+      },
+    },
+  },
+};
+
+// Load a vehicle and make sure the current user may change it (owner or admin)
+const loadOwnedVehicle = async (req, res) => {
+  const vehicle = await prisma.vehicle.findUnique({ where: { id: req.params.id } });
+  if (!vehicle) {
+    sendError(res, "Vehicle not found", 404);
+    return null;
+  }
+  if (!isAdminUser(req.user) && vehicle.sellerId !== req.user.id) {
+    sendError(res, "You can only manage your own vehicles", 403);
+    return null;
+  }
+  return vehicle;
+};
+
+// ============================================================
+// CREATE — POST /api/vehicles (multipart/form-data from AddVehicleForm / AdminAddVehicleForm)
+//   files: "images" (multiple), "rcFront", "insuranceDocument"
+// ============================================================
 export const createVehicle = async (req, res, next) => {
   try {
-    // Debug: log incoming request summary to help trace missing fields/files
-    try {
-      console.log("createVehicle: user=", req.user?.id || null);
-      console.log(
-        "createVehicle: body keys=",
-        Object.keys(req.body || {}).join(", ") || "(none)",
-      );
-      console.log(
-        "createVehicle: files=",
-        Object.keys(req.files || {})
-          .map((k) => `${k}(${(req.files[k] || []).length})`)
-          .join(", ") || "(none)",
-      );
-    } catch (logErr) {
-      console.log("createVehicle: debug log error", logErr);
-    }
-
     const b = req.body || {};
 
-    // Basic required-field guard
     if (!b.title || !b.brand || !b.model || !b.price || !b.fuelType || !b.transmission) {
       return sendError(res, "Missing required vehicle fields", 400);
     }
+    const data = vehicleDataFromForm(b);
+    if (data.price === undefined) return sendError(res, "Price must be a valid number", 400);
 
-    const price = toFloat(b.price);
-    if (price === undefined) {
-      return sendError(res, "Price must be a valid number", 400);
+    // Seller (individual) = one open listing at a time; Dealer = no limit. Checked before any upload.
+    if (!isAdminUser(req.user)) {
+      const allowance = await listingAllowance(req.user);
+      if (!allowance.canAdd) return res.status(409).json({ success: false, code: "SELLER_LISTING_LIMIT", message: SELLER_LIMIT_MESSAGE });
+      data.sellerType = accountSellerType(req.user.role);
     }
 
-    // ---- Upload gallery images (multiple) ----
-    const imageFiles = req.files?.images || [];
-    const imageUrls = [];
-    for (const file of imageFiles) {
-      const result = await cloudinaryService.uploadBuffer(
-        file.buffer,
-        "vehiclehub/vehicles",
-      );
-      imageUrls.push(result.secure_url);
-    }
+    const imageUrls = await uploadMany(req.files?.images, "vehiclehub/vehicles", req);
+    const rcFrontUrl = (await uploadMany(req.files?.rcFront, "vehiclehub/documents", req))[0];
+    const insuranceDocumentUrl = (await uploadMany(req.files?.insuranceDocument, "vehiclehub/documents", req))[0];
 
-    // ---- Upload single documents ----
-    const rcFrontFile = req.files?.rcFront?.[0];
-    const insuranceDocFile = req.files?.insuranceDocument?.[0];
-
-    const rcFrontUrl = rcFrontFile
-      ? (await cloudinaryService.uploadBuffer(rcFrontFile.buffer, "vehiclehub/documents"))
-          .secure_url
-      : undefined;
-
-    const insuranceDocumentUrl = insuranceDocFile
-      ? (await cloudinaryService.uploadBuffer(insuranceDocFile.buffer, "vehiclehub/documents"))
-          .secure_url
-      : undefined;
-
-    const categoryId = await resolveCategoryId(b.categoryId, b.category);
-
-    const features = Array.isArray(b.features)
-      ? b.features
-      : b.features
-        ? [b.features]
-        : [];
-    const hasFeature = (name) =>
-      features.some((f) => String(f).toLowerCase() === name.toLowerCase());
-
-    // Map AddVehicleForm field names -> Prisma Vehicle model fields
+    const isAdmin = isAdminUser(req.user);
+    // Admin "Add Vehicle" form: publish now (default) or keep as a draft
+    const adminPublish = b.publishImmediately === undefined || toBool(b.publishImmediately);
+    const now = new Date();
     const payload = {
-      title: b.title,
-      description: b.description,
-      brand: b.brand,
-      model: b.model,
-      variant: b.variant,
-      vehicleType: b.category, // keep the plain category name too
-      categoryId,
+      ...data,
+      categoryId: await resolveCategoryId(b.categoryId, b.category),
       brandId: b.brandId || undefined,
-      sellerId: req.user?.id, // set by authenticateUser middleware
-
-      price,
-      expectedPrice: toFloat(b.expectedPrice),
-      negotiable: toBool(b.negotiable),
-      emiAvailable: toBool(b.emiAvailable),
-
-      year: toInt(pick(b.year, b.manufacturingYear)),
-      registrationYear: toInt(b.registrationYear),
-      mileage: toInt(pick(b.kmDriven, b.mileage)), // Vehicle.mileage is Int (km driven)
-      fuelType: b.fuelType,
-      transmission: b.transmission,
-      bodyType: b.bodyType,
-      ownership: toInt(b.ownership), // "1st Owner" -> 1
-      color: b.color,
-      engineCapacity: b.engineCapacity ? String(b.engineCapacity) : undefined,
-      seatingCapacity: toInt(b.seatingCapacity),
-      registrationNumber: b.registrationNumber,
-      registrationState: b.registrationState,
-      vinNumber: b.vin,
-      location: pick(b.location, b.area),
-      city: b.city,
-      state: b.state,
-      pincode: b.pincode,
-
-      insuranceCompany: b.insuranceCompany,
-      insuranceExpiry: toDate(b.insuranceExpiry),
-      insuranceType: b.insuranceType,
-      fitnessValidTill: toDate(b.fitnessValidTill),
-      pollutionValidTill: toDate(b.pollutionValidTill),
-
+      sellerId: req.user.id,
       rcFront: rcFrontUrl,
       insuranceDocument: insuranceDocumentUrl,
       images: imageUrls,
       thumbnail: imageUrls[0],
       documentImages: [rcFrontUrl, insuranceDocumentUrl].filter(Boolean),
-
-      features,
-      airbags: toInt(b.airbags),
-      abs: toBool(b.abs) || hasFeature("ABS"),
-      sunroof: toBool(b.sunroof) || hasFeature("Sunroof"),
-      alloyWheels: toBool(b.alloyWheels) || hasFeature("Alloy Wheels"),
-      bluetooth: toBool(b.bluetooth) || hasFeature("Bluetooth"),
-      touchscreen: toBool(b.touchscreen) || hasFeature("Touch Screen"),
-      reverseCamera: toBool(b.reverseCamera) || hasFeature("Reverse Camera"),
-      parkingSensors: toBool(b.parkingSensors) || hasFeature("Parking Sensors"),
-      powerSteering: toBool(b.powerSteering) || hasFeature("Power Steering"),
-      powerWindows: toBool(b.powerWindows) || hasFeature("Power Windows"),
-      ac: toBool(b.ac) || hasFeature("Air Conditioner"),
-      cruiseControl: toBool(b.cruiseControl) || hasFeature("Cruise Control"),
-      keylessEntry: toBool(b.keylessEntry) || hasFeature("Keyless Entry"),
-
-      // Owner / seller details from the form
-      ownerName: pick(b.sellerName, b.dealerName),
-      ownerPhone: b.mobileNumber,
-      ownerEmail: b.email,
-      sellerType: b.sellerType,
-
-      // Condition
-      condition: b.vehicleCondition,
-      engineCondition: b.engineCondition,
-      tyreCondition: b.tyreCondition,
-      batteryCondition: b.batteryCondition,
-      floodDamage: toBool(b.floodDamage),
-      accidental: toBool(b.accidentHistory),
-
-      // Extra details
-      serviceHistory: toBool(b.serviceBook), // form sends Yes/No; Vehicle.serviceBook is a file URL
-      loanRunning: toBool(b.loanPending),
-      nocAvailable: toBool(b.nocAvailable),
-      numberOfKeys: toInt(b.numberOfKeys),
-
-      isFeatured: toBool(b.isFeatured),
+      // Seller listings wait for admin approval; a listing added by the admin is live right away
+      ...(isAdmin
+        ? adminPublish
+          ? { status: "AVAILABLE", isApproved: true, isVerified: true, publishedAt: now, isFeatured: toBool(b.isFeatured) }
+          : { status: "DRAFT", isApproved: false }
+        : { status: "PENDING", isApproved: false }),
     };
-
-    // Strip undefined keys so Prisma uses schema defaults where nothing was sent
-    Object.keys(payload).forEach(
-      (k) => payload[k] === undefined && delete payload[k],
-    );
+    Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k]);
 
     const vehicle = await vehicleService.createVehicle(payload);
-    sendSuccess(res, "Vehicle created successfully", vehicle, 201);
+    await prisma.vehicleStatusHistory.create({
+      data: {
+        vehicleId: vehicle.id,
+        fromStatus: null,
+        toStatus: vehicle.status,
+        reason: isAdmin ? "Listed by admin" : "Listing submitted",
+        changedById: req.user.id,
+      },
+    });
+
+    if (!isAdmin) {
+      // Let the admins know there is something to review
+      const admins = await prisma.user.findMany({ where: { role: "ADMIN", isActive: true }, select: { id: true } });
+      if (admins.length) {
+        await prisma.notification.createMany({
+          data: admins.map((a) => ({
+            userId: a.id,
+            type: "SYSTEM_ALERT",
+            title: "New vehicle awaiting approval",
+            message: `${vehicle.title} was submitted for review.`,
+            metadata: { vehicleId: vehicle.id, kind: "vehicle_submitted" },
+          })),
+        });
+      }
+    }
+
+    sendSuccess(
+      res,
+      isAdmin ? (adminPublish ? "Vehicle added and published" : "Vehicle saved as a draft") : "Vehicle submitted for admin approval",
+      toVehicleDTO(vehicle),
+      201,
+    );
   } catch (error) {
     next(error);
   }
 };
 
+// ============================================================
+// UPDATE — PUT /api/vehicles/:id (EditVehicleModal, multipart/form-data)
+//   existingImages (JSON) + new "images", rcFront / insuranceDocument files,
+//   removeRcFront / removeInsuranceDocument, existingDocuments (JSON) + new "documents"
+// ============================================================
 export const updateVehicle = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const body = { ...req.body };
-
-    // Frontend sends "existingImages" (JSON array of URLs kept after user deletions)
-    // when the image gallery was edited; merge that with any newly uploaded files.
-    let keptImages;
-    if (body.existingImages !== undefined) {
-      try {
-        keptImages = JSON.parse(body.existingImages);
-        if (!Array.isArray(keptImages)) keptImages = [];
-      } catch {
-        keptImages = [];
-      }
-      delete body.existingImages;
+    const existing = await loadOwnedVehicle(req, res);
+    if (!existing) return;
+    const isAdmin = isAdminUser(req.user);
+    if (!isAdmin && existing.status === "SOLD") {
+      return sendError(res, "Sold vehicles can't be edited", 409);
     }
 
-    // Optional: allow adding more images / replacing documents on update
-    if (req.files?.images?.length) {
-      const newUrls = [];
-      for (const file of req.files.images) {
-        const result = await cloudinaryService.uploadBuffer(
-          file.buffer,
-          "vehiclehub/vehicles",
-        );
-        newUrls.push(result.secure_url);
-      }
-      if (keptImages !== undefined) {
-        body.images = [...keptImages, ...newUrls];
-      } else {
-        const existing = await vehicleService.getVehicleById(id);
-        body.images = [...(existing?.images || []), ...newUrls];
-      }
-    } else if (keptImages !== undefined) {
-      body.images = keptImages;
+    const b = req.body || {};
+    const data = vehicleDataFromForm(b, { partial: true });
+    if (b.category !== undefined || b.categoryId !== undefined) {
+      data.categoryId = await resolveCategoryId(b.categoryId, b.category);
+    }
+    if (isAdmin && b.isFeatured !== undefined) data.isFeatured = toBool(b.isFeatured);
+    if (!isAdmin) data.sellerType = accountSellerType(req.user.role);
+
+    // Images: kept URLs (after removals) + new uploads
+    // only files that already belong to this vehicle can be "kept"
+    const keptImages = parseJsonArray(b.existingImages)?.filter((u) => (existing.images || []).includes(u));
+    const newImages = await uploadMany(req.files?.images, "vehiclehub/vehicles", req);
+    if (keptImages !== undefined || newImages.length) {
+      data.images = [...(keptImages ?? existing.images ?? []), ...newImages];
+      data.thumbnail = data.images[0] || null;
     }
 
-    if (req.files?.rcFront?.[0]) {
-      const result = await cloudinaryService.uploadBuffer(
-        req.files.rcFront[0].buffer,
-        "vehiclehub/documents",
-      );
-      body.rcFront = result.secure_url;
-    }
-    if (req.files?.insuranceDocument?.[0]) {
-      const result = await cloudinaryService.uploadBuffer(
-        req.files.insuranceDocument[0].buffer,
-        "vehiclehub/documents",
-      );
-      body.insuranceDocument = result.secure_url;
+    // Single documents
+    const rc = (await uploadMany(req.files?.rcFront, "vehiclehub/documents", req))[0];
+    if (rc) data.rcFront = rc;
+    else if (toBool(b.removeRcFront)) data.rcFront = null;
+    const ins = (await uploadMany(req.files?.insuranceDocument, "vehiclehub/documents", req))[0];
+    if (ins) data.insuranceDocument = ins;
+    else if (toBool(b.removeInsuranceDocument)) data.insuranceDocument = null;
+
+    // Additional documents
+    const keptDocs = parseJsonArray(b.existingDocuments)?.filter((u) => (existing.documentImages || []).includes(u));
+    const newDocs = await uploadMany(req.files?.documents, "vehiclehub/documents", req);
+    if (keptDocs !== undefined || newDocs.length) {
+      data.documentImages = [...(keptDocs ?? existing.documentImages ?? []), ...newDocs];
     }
 
-    // Cast numeric fields if present
-    [
-      "price",
-      "expectedPrice",
-      "year",
-      "registrationYear",
-      "mileage",
-      "ownership",
-      "seatingCapacity",
-      "airbags",
-    ].forEach((k) => {
-      if (body[k] !== undefined) body[k] = Number(body[k]);
-    });
+    // A seller's edit to a draft, live or rejected listing goes (back) to admin review
+    const backToReview = !isAdmin && ["DRAFT", "AVAILABLE", "APPROVED", "REJECTED"].includes(existing.status);
+    if (backToReview) {
+      data.status = "PENDING";
+      data.isApproved = false;
+      data.rejectReason = null;
+    }
 
-    const vehicle = await vehicleService.updateVehicle(id, body);
-    sendSuccess(res, "Vehicle updated successfully", vehicle);
+    const vehicle = await prisma.vehicle.update({ where: { id: existing.id }, data, include: detailInclude });
+    // Remove replaced / deleted files from R2
+    const stillUsed = new Set(vehicleFiles(vehicle));
+    await deleteStoredFiles(vehicleFiles(existing).filter((u) => !stillUsed.has(u)));
+
+    if (backToReview) {
+      await prisma.vehicleStatusHistory.create({
+        data: {
+          vehicleId: existing.id,
+          fromStatus: existing.status,
+          toStatus: "PENDING",
+          reason: "Edited by seller — sent for re-approval",
+          changedById: req.user.id,
+        },
+      });
+    }
+
+    sendSuccess(
+      res,
+      backToReview ? "Vehicle updated and sent to admin for re-approval" : "Vehicle updated successfully",
+      toVehicleDTO(vehicle),
+    );
   } catch (error) {
     next(error);
   }
+};
+
+// DELETE /api/vehicles/:id/images   body: { imageUrl }
+export const deleteVehicleImage = async (req, res, next) => {
+  try {
+    const existing = await loadOwnedVehicle(req, res);
+    if (!existing) return;
+    const imageUrl = req.body?.imageUrl;
+    if (!imageUrl) return sendError(res, "imageUrl is required", 400);
+    const images = (existing.images || []).filter((url) => url !== imageUrl);
+    const vehicle = await prisma.vehicle.update({
+      where: { id: existing.id },
+      data: { images, thumbnail: images[0] || null },
+    });
+    if ((existing.images || []).includes(imageUrl)) await deleteStoredFiles([imageUrl]);
+    sendSuccess(res, "Image removed", toVehicleDTO(vehicle));
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Delete a vehicle if nothing references it; otherwise tell the caller to archive it
+const removeVehicle = async (req, res) => {
+  const vehicle = await loadOwnedVehicle(req, res);
+  if (!vehicle) return;
+  const id = vehicle.id;
+  try {
+    await prisma.$transaction([
+      prisma.wishlist.deleteMany({ where: { vehicleId: id } }),
+      prisma.cartItem.deleteMany({ where: { vehicleId: id } }),
+      prisma.vehicle.delete({ where: { id } }), // status history + purchase requests cascade
+    ]);
+  } catch (err) {
+    // Foreign key: vehicle already has orders / inquiries / inspections / payments
+    if (err?.code === "P2003") {
+      return sendError(
+        res,
+        "This vehicle has inquiries, orders or inspections linked to it and can't be deleted. Mark it as sold or archive it instead.",
+        409,
+      );
+    }
+    throw err;
+  }
+  await deleteStoredFiles(vehicleFiles(vehicle));
+  return sendSuccess(res, "Listing deleted successfully");
 };
 
 export const deleteVehicle = async (req, res, next) => {
   try {
-    await vehicleService.deleteVehicle(req.params.id);
-    sendSuccess(res, "Vehicle deleted successfully");
+    await removeVehicle(req, res);
   } catch (error) {
     next(error);
   }
 };
 
+// ============================================================
+// PUBLIC LISTINGS
+// ============================================================
 export const getAllVehicles = async (req, res, next) => {
   try {
     const data = await vehicleService.getAllVehicles(req.query);
@@ -397,67 +449,15 @@ export const getHomepageVehicles = async (req, res, next) => {
   }
 };
 
-// ============================================================
-// GET /api/vehicles/:id  — public vehicle detail page (VehicleDetailPage.jsx)
-// Returns every Vehicle column plus the seller and category, and the
-// AddVehicleForm-style field names the page reads (sellerName, mobileNumber,
-// kmDriven, manufacturingYear, vin, rcAvailable, …).
-// ============================================================
-const isFuture = (d) => Boolean(d) && new Date(d).getTime() > Date.now();
-
-const toVehicleDetailDTO = (v) => {
-  const profile = v.seller?.sellerProfile;
-  const { category, seller, ...rest } = v;
-  const profileType = profile?.sellerType === "DEALER" ? "Dealer" : profile?.sellerType === "INDIVIDUAL" ? "Individual" : null;
-  return {
-    ...rest,
-    category: category?.name || v.vehicleType || null,
-    categoryId: v.categoryId,
-
-    // Seller (listing contact first, then the seller's account / business profile)
-    sellerName: v.ownerName || profile?.businessName || profile?.ownerName || seller?.fullName || null,
-    sellerBusinessName: profile?.businessName || null,
-    sellerVerified: profile?.verificationStatus === "APPROVED",
-    mobileNumber: v.ownerPhone || seller?.phone || null,
-    email: v.ownerEmail || seller?.email || null,
-    sellerType: v.sellerType || profileType,
-
-    // Form-name aliases
-    kmDriven: v.mileage, // Vehicle.mileage stores km driven
-    manufacturingYear: v.year,
-    vin: v.vinNumber || v.chassisNumber || null,
-    vehicleCondition: v.condition,
-    area: v.location,
-    accidentHistory: v.accidental,
-    loanPending: v.loanRunning,
-    rcAvailable: Boolean(v.rcFront || v.rcBack),
-    insuranceAvailable: Boolean(v.insuranceDocument || v.insuranceCompany) && (!v.insuranceExpiry || isFuture(v.insuranceExpiry)),
-    pollutionCertificate: Boolean(v.pollutionDocument) || isFuture(v.pollutionValidTill),
-    serviceBook: v.serviceBook || v.serviceHistory || null,
-  };
-};
-
+// GET /api/vehicles/:id — public vehicle detail page (VehicleDetailPage.jsx)
 export const getVehicleById = async (req, res, next) => {
   try {
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: req.params.id },
-      include: {
-        category: { select: { id: true, name: true } },
-        seller: {
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            email: true,
-            sellerProfile: {
-              select: { businessName: true, ownerName: true, sellerType: true, verificationStatus: true },
-            },
-          },
-        },
-      },
+      include: detailInclude,
     });
     if (!vehicle) return sendError(res, "Vehicle not found", 404);
-    sendSuccess(res, "Vehicle fetched successfully", toVehicleDetailDTO(vehicle));
+    sendSuccess(res, "Vehicle fetched successfully", toVehicleDTO(vehicle));
   } catch (error) {
     next(error);
   }
@@ -503,26 +503,17 @@ export const filterVehicle = async (req, res, next) => {
 
 const yesNo = (v) => (v === true ? "Yes" : v === false ? "No" : v ?? null);
 
-const CATEGORY_EMOJI = {
-  car: "🚗",
-  bike: "🏍️",
-  scooter: "🛵",
-  truck: "🚚",
-  bus: "🚌",
-  auto: "🛺",
-  tractor: "🚜",
-  "commercial vehicle": "🚐",
-};
-
 // Shape a Vehicle row the way the admin review UI expects
 // (it uses the AddVehicleForm field names).
 const toApprovalDTO = (v) => {
   const categoryName = v.category?.name || v.vehicleType || null;
   const sellerProfile = v.seller?.sellerProfile;
+  const inspection = v.inspections?.[0];
+  const { inspections, ...rest } = v;
   return {
-    ...v,
+    ...rest,
     category: categoryName,
-    thumb: CATEGORY_EMOJI[String(categoryName || "").toLowerCase()] || "🚘",
+    thumb: categoryEmoji(categoryName),
     thumbnail: v.thumbnail || v.images?.[0] || null,
 
     // seller
@@ -560,6 +551,17 @@ const toApprovalDTO = (v) => {
       insuranceDocument: v.insuranceDocument || null,
     },
 
+    // latest field inspection (assigned from the review modal)
+    inspection: inspection
+      ? {
+          id: inspection.id,
+          status: inspection.status,
+          result: inspection.result,
+          scheduledAt: inspection.scheduledAt,
+          inspectorName: inspection.inspector?.fullName || null,
+        }
+      : null,
+
     submittedAt: v.createdAt
       ? new Date(v.createdAt).toLocaleDateString("en-IN", {
           day: "2-digit",
@@ -587,6 +589,11 @@ export const getPendingVehicles = async (req, res, next) => {
               select: { businessName: true, ownerName: true, sellerType: true },
             },
           },
+        },
+        inspections: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { id: true, status: true, result: true, scheduledAt: true, inspector: { select: { fullName: true } } },
         },
       },
     });
@@ -689,12 +696,24 @@ export const approveVehicle = (req, res, next) =>
 export const rejectVehicle = (req, res, next) =>
   changeApprovalStatus(req, res, next, "REJECTED");
 
+// ============================================================
+// Status changes by the owner (or admin)
+// PATCH /api/vehicles/:id/sold     body: { soldPrice? }
+// PATCH /api/vehicles/:id/pending  (resubmit for approval)
+// ============================================================
 export const soldVehicle = async (req, res, next) => {
   try {
-    const vehicle = await vehicleService.updateVehicle(req.params.id, {
-      status: "SOLD",
+    const existing = await loadOwnedVehicle(req, res);
+    if (!existing) return;
+    const soldPrice = toFloat(req.body?.soldPrice);
+    const vehicle = await prisma.vehicle.update({
+      where: { id: existing.id },
+      data: { status: "SOLD", soldAt: new Date(), ...(soldPrice !== undefined ? { soldPrice } : {}) },
     });
-    sendSuccess(res, "Vehicle marked sold", vehicle);
+    await prisma.vehicleStatusHistory.create({
+      data: { vehicleId: existing.id, fromStatus: existing.status, toStatus: "SOLD", reason: "Marked sold", changedById: req.user.id },
+    });
+    sendSuccess(res, "Vehicle marked sold", toVehicleDTO(vehicle));
   } catch (error) {
     next(error);
   }
@@ -702,10 +721,22 @@ export const soldVehicle = async (req, res, next) => {
 
 export const pendingVehicle = async (req, res, next) => {
   try {
-    const vehicle = await vehicleService.updateVehicle(req.params.id, {
-      status: "PENDING",
+    const existing = await loadOwnedVehicle(req, res);
+    if (!existing) return;
+    if (existing.status === "SOLD") return sendError(res, "Sold vehicles can't be resubmitted", 409);
+    // Re-opening an archived listing counts against an individual seller's one-listing limit
+    if (existing.status === "ARCHIVED" && !isAdminUser(req.user)) {
+      const allowance = await listingAllowance(req.user);
+      if (!allowance.canAdd) return res.status(409).json({ success: false, code: "SELLER_LISTING_LIMIT", message: SELLER_LIMIT_MESSAGE });
+    }
+    const vehicle = await prisma.vehicle.update({
+      where: { id: existing.id },
+      data: { status: "PENDING", isApproved: false },
     });
-    sendSuccess(res, "Vehicle marked pending", vehicle);
+    await prisma.vehicleStatusHistory.create({
+      data: { vehicleId: existing.id, fromStatus: existing.status, toStatus: "PENDING", reason: "Submitted for approval", changedById: req.user.id },
+    });
+    sendSuccess(res, "Vehicle sent for approval", toVehicleDTO(vehicle));
   } catch (error) {
     next(error);
   }
@@ -715,8 +746,8 @@ export const pendingVehicle = async (req, res, next) => {
 // SELLER: "my listings"
 // GET    /api/vehicles/my/listings?status=draft|pending|under_verification|approved|rejected|sold|archived
 // DELETE /api/vehicles/my/listings/:id
-// Used by ActiveListingsPage, SoldVehiclesPage, InventoryOverviewTable, SellerDashboardPage
-// (they read `data.vehicles`).
+// Used by ActiveListingsPage, SoldVehiclesPage, InventoryOverviewTable, SellerDashboardPage,
+// and the Draft / Pending / Approved / Rejected pages (they read `data.vehicles`).
 // ============================================================
 
 const MY_LISTING_STATUS_MAP = {
@@ -743,18 +774,20 @@ export const getMyListings = async (req, res, next) => {
       orderBy: { createdAt: "desc" },
       include: {
         category: { select: { id: true, name: true } },
-        _count: { select: { inquiries: true, wishlist: true } },
+        _count: { select: { inquiries: true, wishlist: true, purchaseRequests: true } },
       },
     });
 
-    // Flatten relations so the tables can render plain values
-    const rows = vehicles.map(({ category, _count, ...v }) => ({
-      ...v,
-      category: category?.name || v.vehicleType || null,
-      categoryName: category?.name || v.vehicleType || null,
-      inquiriesCount: _count?.inquiries ?? 0,
-      wishlistCount: _count?.wishlist ?? 0,
-    }));
+    // Flatten relations + add the form field names so EditVehicleModal can prefill
+    const rows = vehicles.map(({ _count, ...v }) => {
+      const dto = toVehicleDTO(v);
+      return {
+        ...dto,
+        categoryName: dto.category,
+        inquiriesCount: (_count?.inquiries ?? 0) + (_count?.purchaseRequests ?? 0),
+        wishlistCount: _count?.wishlist ?? 0,
+      };
+    });
 
     return res.json({
       success: true,
@@ -769,38 +802,7 @@ export const getMyListings = async (req, res, next) => {
 
 export const deleteMyListing = async (req, res, next) => {
   try {
-    const { id } = req.params;
-
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id },
-      select: { id: true, sellerId: true },
-    });
-    if (!vehicle) return sendError(res, "Vehicle not found", 404);
-
-    const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(req.user.role);
-    if (vehicle.sellerId !== req.user.id && !isAdmin) {
-      return sendError(res, "You can only delete your own listings", 403);
-    }
-
-    try {
-      await prisma.$transaction([
-        prisma.wishlist.deleteMany({ where: { vehicleId: id } }),
-        prisma.cartItem.deleteMany({ where: { vehicleId: id } }),
-        prisma.vehicle.delete({ where: { id } }), // status history cascades
-      ]);
-    } catch (err) {
-      // Foreign key: vehicle already has orders / inquiries / inspections / payments
-      if (err?.code === "P2003") {
-        return sendError(
-          res,
-          "This vehicle has inquiries, orders or inspections linked to it and can't be deleted. Mark it as sold or archive it instead.",
-          409,
-        );
-      }
-      throw err;
-    }
-
-    return sendSuccess(res, "Listing deleted successfully");
+    await removeVehicle(req, res);
   } catch (error) {
     next(error);
   }

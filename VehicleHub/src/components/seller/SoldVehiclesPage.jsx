@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/components/seller/SoldVehiclesPage.jsx
 import { useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Eye, Loader2, AlertCircle, ShoppingBag, Search } from 'lucide-react';
@@ -22,7 +23,7 @@ export const SoldVehiclesPage = () => {
 
     return (
         <div className="space-y-6">
-            <Helmet><title>Sold Vehicles | VehicleHub Seller</title></Helmet>
+            <Helmet><title>Sold Vehicles | VehicleHub</title></Helmet>
 
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 {/* Header — matches InventoryOverviewTable */}

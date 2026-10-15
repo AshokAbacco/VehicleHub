@@ -1,14 +1,12 @@
-import cloudinaryService from '../services/cloudinaryService.js';
-import { sendSuccess  } from '../utils/response.js';
+// VehicleHub/VehicleHub_Server/src/controllers/uploadController.js
+// POST /api/uploads/vehicle-images — stores the images in Cloudflare R2 and returns their URLs.
+import { storeUpload } from '../utils/storeUpload.js';
+import { sendSuccess } from '../utils/response.js';
 
 export const uploadVehicleImages = async (req, res, next) => {
   try {
-    const files = req.files || [];
     const urls = [];
-    for (const file of files) {
-      const result = await cloudinaryService.uploadBuffer(file.buffer, 'vehiclehub/vehicles');
-      urls.push(result.secure_url);
-    }
+    for (const file of req.files || []) urls.push(await storeUpload(file, 'vehiclehub/vehicles'));
     sendSuccess(res, 'Images uploaded', { urls });
   } catch (error) {
     next(error);

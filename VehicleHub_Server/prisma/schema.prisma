@@ -11,15 +11,14 @@ datasource db {
 // ENUMS
 // ============================================================
 
+// The app has exactly four login roles.
+// INSPECTOR = Field Inspector.
 enum Role {
-  SUPER_ADMIN
   ADMIN
-  SELLER
+  SELLER // individual — one vehicle at a time
+  DEALER // business / shop — many vehicles
   BUYER
-  DEALER
   INSPECTOR
-  FINANCE
-  SUPPORT
 }
 
 enum VehicleStatus {
@@ -40,10 +39,13 @@ enum InquiryStatus {
 }
 
 enum InspectionStatus {
-  PENDING
-  ASSIGNED
-  COMPLETED
+  PENDING // created, no inspector yet
+  ASSIGNED // inspector assigned by admin
+  ACCEPTED // inspector accepted the job
+  IN_PROGRESS // inspector started the on-site verification
+  COMPLETED // report submitted
   REJECTED
+  CANCELLED
 }
 
 enum LoanStatus {
@@ -680,6 +682,29 @@ model Inspection {
   approved    Boolean          @default(false)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+
+  // Field Inspector workflow
+  priority     String    @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  deadline     DateTime?
+  assignedAt   DateTime?
+  assignedById String? // admin User.id who assigned it
+  acceptedAt   DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+
+  // Verification report (saved step by step from InspectionVerify)
+  result           String? // VERIFIED | REJECTED | NEEDS_CORRECTION
+  finalRating      Int?
+  finalNotes       String?
+  rejectionReason  String?
+  correctionReason String?
+  checklist        Json? // { sellerVerified, documentsVerified, ..., *Notes }
+  documentChecks   Json? // [{ id, documentType, documentUrl, documentNumber, status, remarks, rejectionReason }]
+  vehicleChecks    Json? // [{ id, category, item, condition, status, remarks }]
+  locationCheck    Json? // { actualAddress, actualLatitude, actualLongitude, locationMatched, vehiclePresent, sellerPresent, remarks }
+  photos           Json? // [{ id, imageUrl, category, uploadedAt }]
+
+  @@index([inspectorId, status])
 }
 
 model Loan {

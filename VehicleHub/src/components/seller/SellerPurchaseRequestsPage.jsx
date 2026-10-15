@@ -196,7 +196,7 @@ export const SellerPurchaseRequestsPage = () => {
 
     return (
         <div className="space-y-6">
-            <Helmet><title>Purchase Requests | VehicleHub Seller</title></Helmet>
+            <Helmet><title>Purchase Requests | VehicleHub</title></Helmet>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Purchase Requests</h1>

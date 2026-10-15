@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/components/seller/AddVehicleForm.jsx
 import { useState, useRef } from "react";
 import {
     Check,
@@ -17,8 +18,9 @@ import {
     Images,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { useCreateVehicleMutation } from "../../services/sellerApiSlice";
+import { useCreateVehicleMutation, useGetMySellerStatusQuery, useGetMyProfileQuery } from "../../services/sellerApiSlice";
 import { useNavigate } from "react-router-dom";
+import { useSellerArea } from '../../hooks/useSellerArea.js';
 
 const categories = [
     "Car",
@@ -253,8 +255,15 @@ const DocumentSlot = ({ label, doc, onSelect, onRemove }) => {
 };
 
 export const AddVehicleForm = () => {
+    const area = useSellerArea();
+    // Seller (individual): one open listing at a time. Dealer: no limit. The server enforces this too.
+    const { data: sellerStatus, isLoading: statusLoading } = useGetMySellerStatusQuery();
+    const { data: profileData } = useGetMyProfileQuery();
+    const shopName = profileData?.data?.businessName || '';
+    const allowance = sellerStatus?.listingAllowance;
     const [step, setStep] = useState(1);
-    const [form, setForm] = useState(initialForm);
+    // "Listed as" always follows the account type
+    const [form, setForm] = useState(() => ({ ...initialForm, sellerType: area.isDealer ? 'Dealer' : 'Individual' }));
     const [errors, setErrors] = useState({});
     const [submitted, setSubmitted] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -333,7 +342,7 @@ export const AddVehicleForm = () => {
             ];
 
             simpleFields.forEach((key) => {
-                const value = form[key];
+                const value = key === 'dealerName' && area.isDealer && !form.dealerName ? shopName : form[key];
                 if (value !== undefined && value !== null && value !== '') {
                     formData.append(key, String(value));
                 }
@@ -351,7 +360,7 @@ export const AddVehicleForm = () => {
             const response = await createVehicle(formData).unwrap();
 
             toast.success(response.message || "Vehicle Added Successfully");
-            navigate("/seller/dashboard/active-listings");
+            navigate(area.to('active-listings'));
         } catch (err) {
             const fieldErrors = err?.data?.errors;
             if (fieldErrors) {
@@ -365,6 +374,28 @@ export const AddVehicleForm = () => {
         } finally {
             setSubmitting(false);
         }
+    }
+
+    // Individual seller who already has an open listing
+    if (!area.isDealer && !statusLoading && allowance && !allowance.canAdd) {
+        return (
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-10 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                    <Car size={26} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-900">You already have a vehicle listed</h3>
+                <p className="max-w-md text-sm text-slate-600">
+                    Seller accounts list one vehicle at a time. Edit your current listing, or mark it as sold, before adding another.
+                    Selling several vehicles? Contact VehicleHub to switch to a Dealer account.
+                </p>
+                <button
+                    onClick={() => navigate(area.to('active-listings'))}
+                    className="mt-2 rounded-xl bg-[#001f3f] px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-[#001f3f]/20 transition hover:bg-[#002a55]"
+                >
+                    Go to my vehicle
+                </button>
+            </div>
+        );
     }
 
     if (submitted) {
@@ -606,13 +637,15 @@ export const AddVehicleForm = () => {
                             <Field label="Email">
                                 <TextInput type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="you@example.com" />
                             </Field>
-                            <Field label="Dealer / Individual">
-                                <PillGroup options={['Individual', 'Dealer']} value={form.sellerType} onChange={(v) => set('sellerType', v)} />
+                            <Field label="Listed as">
+                                <div className="flex h-[46px] items-center rounded-xl border-2 border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700">
+                                    {area.isDealer ? 'Dealer' : 'Individual seller'}
+                                </div>
                             </Field>
-                            {form.sellerType === 'Dealer' && (
+                            {area.isDealer && (
                                 <div className="sm:col-span-2">
-                                    <Field label="Dealer Name" hint="Optional">
-                                        <TextInput value={form.dealerName} onChange={(e) => set('dealerName', e.target.value)} placeholder="e.g. RK Dealerships" />
+                                    <Field label="Dealer Name" hint="Defaults to your shop name">
+                                        <TextInput value={form.dealerName} onChange={(e) => set('dealerName', e.target.value)} placeholder={shopName || 'e.g. RK Dealerships'} />
                                     </Field>
                                 </div>
                             )}

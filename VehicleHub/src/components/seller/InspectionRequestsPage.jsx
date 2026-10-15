@@ -256,7 +256,7 @@ export const InspectionRequestsPage = () => {
 
     return (
         <div className="space-y-6">
-            <Helmet><title>Inspection Requests | VehicleHub Seller</title></Helmet>
+            <Helmet><title>Inspection Requests | VehicleHub</title></Helmet>
             <div className="rounded-2xl bg-linear-to-br from-[#001f3f] via-[#002a55] to-[#003d7a] p-5 shadow-lg sm:p-7"><p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.25em] text-cyan-200"><CalendarCheck size={13} /> Vehicle Inspections</p><h1 className="mt-1 text-2xl font-bold text-white sm:text-3xl">Inspection Requests</h1><p className="mt-1 text-sm text-white/70">Field inspections of your vehicles by our verified inspectors.</p></div>
             {isLoading && <div className="flex h-48 items-center justify-center rounded-2xl border border-slate-200 bg-white"><Loader2 className="h-7 w-7 animate-spin text-[#001f3f]" /></div>}
             {isError && <div className="flex h-48 items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 text-sm text-red-600"><AlertCircle size={20} /> Failed to load inspection requests.</div>}

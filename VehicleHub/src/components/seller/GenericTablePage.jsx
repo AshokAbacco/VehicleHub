@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/components/seller/GenericTablePage.jsx
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Helmet } from 'react-helmet-async';
@@ -515,14 +516,15 @@ export const GenericTablePage = ({
         return filtered.slice(start, start + pageSize);
     }, [filtered, safePage, pageSize]);
 
-    const handleDelete = (row) => {
-        setLocalRows((prev) => prev.filter((r) => r.id !== row.id));
-        onDelete?.(row);
+    const handleDelete = async (row) => {
+        if (!onDelete) return;
+        const result = await onDelete(row);
+        if (result !== false) setLocalRows((prev) => prev.filter((r) => r.id !== row.id));
     };
 
     return (
         <div className="space-y-6">
-            <Helmet><title>{title} | VehicleHub Seller</title></Helmet>
+            <Helmet><title>{title} | VehicleHub</title></Helmet>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -574,7 +576,7 @@ export const GenericTablePage = ({
                             <div className="mt-4 flex gap-2 border-t border-slate-100 pt-3">
                                 <button onClick={() => { setViewingRow(row); onRowAction?.(row); }} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600" aria-label="View details"><Eye size={14} /> View</button>
                                 {onEdit && <button onClick={() => onEdit(row)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600" aria-label="Edit"><Pencil size={14} /> Edit</button>}
-                                <button onClick={() => setConfirmDeleteRow(row)} className="flex h-9 w-10 items-center justify-center rounded-lg border border-red-100 text-red-500" aria-label="Delete"><Trash2 size={14} /></button>
+                                {onDelete && <button onClick={() => setConfirmDeleteRow(row)} className="flex h-9 w-10 items-center justify-center rounded-lg border border-red-100 text-red-500" aria-label="Delete"><Trash2 size={14} /></button>}
                             </div>
                         </article>
                     ))}
@@ -630,14 +632,16 @@ export const GenericTablePage = ({
                                                         <Pencil size={15} />
                                                     </button>
                                                 )}
-                                                <button
-                                                    onClick={() => setConfirmDeleteRow(row)}
-                                                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-red-400 hover:bg-red-50 hover:text-red-500"
-                                                    aria-label="Delete"
-                                                    title="Delete"
-                                                >
-                                                    <Trash2 size={15} />
-                                                </button>
+                                                {onDelete && (
+                                                    <button
+                                                        onClick={() => setConfirmDeleteRow(row)}
+                                                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-red-400 hover:bg-red-50 hover:text-red-500"
+                                                        aria-label="Delete"
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

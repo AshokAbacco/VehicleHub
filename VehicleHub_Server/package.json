@@ -9,7 +9,8 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
     "test": "echo \"No tests specified\"",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "fix-roles": "node prisma/fix-roles.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -24,6 +25,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
     "@prisma/client": "^5.9.1",
     "axios": "^1.19.0",
     "bcryptjs": "^2.4.3",

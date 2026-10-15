@@ -8,9 +8,9 @@ import {
     HelpCircle, Settings, LogOut, Pencil, LayoutDashboard,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { Sun, Moon } from "lucide-react";
 import { useAuthGate } from "../../context/AuthGateContext.jsx";
-import { useCheckUserRoleMutation } from "../../services/authApiSlice.js";
+import { dashboardPathFor, notificationsPathFor, normalizeRole } from "../../utils/roleAccess.js";
+import { openSellerArea } from "../../utils/sellerStatus.js";
 import { AvatarImage } from '../ui/AvatarImage.jsx';
 
 // Values must match the database: category = Category.name, body = Vehicle.bodyType,
@@ -43,48 +43,21 @@ const cities = [
 ];
 
 
-const getDashboardPathForRole = (role) => {
-    const normalizedRole = String(role || 'buyer').toLowerCase().replace(/-/g, '_');
+// Each role's own profile / account page
+const profilePathFor = (role) => ({
+    admin: '/admin/dashboard/settings',
+    seller: '/seller/dashboard/business-profile',
+    dealer: '/dealer/dashboard/business-profile',
+    inspector: '/field-inspector/profile',
+    buyer: '/buyer/dashboard/profile',
+})[normalizeRole(role)] || '/buyer/dashboard/profile';
 
-    switch (normalizedRole) {
-        case 'seller': return '/seller/dashboard';
-        case 'admin': return '/admin/dashboard';
-        case 'dealer': return '/dealer/dashboard';
-        case 'inspector':
-        case 'field_inspector':
-        case 'field-inspector': return '/field-inspector/dashboard';
-        case 'finance': return '/finance/dashboard';
-        case 'support': return '/support/dashboard';
-        case 'super-admin': return '/super-admin/dashboard';
-        case 'buyer':
-        default: return '/buyer/dashboard';
-    }
-};
-
-const getNotificationsPathForRole = (role) => {
-    const normalizedRole = String(role || 'buyer').toLowerCase().replace(/-/g, '_');
-
-    switch (normalizedRole) {
-        case 'seller': return '/seller/dashboard/notifications';
-        case 'admin': return '/admin/dashboard/notifications';
-        case 'inspector':
-        case 'field_inspector':
-        case 'field-inspector': return '/field-inspector/notifications';
-        case 'dealer': return '/dealer/dashboard';
-        case 'finance': return '/finance/dashboard';
-        case 'support': return '/support/dashboard';
-        case 'super-admin': return '/super-admin/dashboard';
-        case 'buyer':
-        default: return '/buyer/dashboard/notifications';
-    }
-};
-
-const hiddenWishlistRoles = ['seller', 'inspector', 'field_inspector', 'field-inspector'];
+const hiddenWishlistRoles = ['seller', 'dealer', 'inspector', 'admin'];
 
 export const Navbar = () => {
-    const { isAuthenticated, user, logout } = useAuth();
-    const role = (user?.role || user?.userRole || 'buyer').toLowerCase();
-    const hideWishlist = isAuthenticated && hiddenWishlistRoles.includes(role.replace(/-/g, '_'));
+    const { isAuthenticated, user, logout, completeAuth } = useAuth();
+    const role = normalizeRole(user?.role || user?.userRole);
+    const hideWishlist = isAuthenticated && hiddenWishlistRoles.includes(role);
     const location = useLocation();
     const navigate = useNavigate();
     const [locationOpen, setLocationOpen] = useState(false);
@@ -92,14 +65,9 @@ export const Navbar = () => {
     const [searchValue, setSearchValue] = useState("");
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
-    const [darkMode, setDarkMode] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
     const [profileMenuPos, setProfileMenuPos] = useState({ top: 0, right: 0 });
 
-    // ONLY thing we track now: is this user a registered seller (regardless of approval)
-    const [sellerRegistered, setSellerRegistered] = useState(null); // null = unknown, true/false once checked
-    const [checkingSellerStatus, setCheckingSellerStatus] = useState(false);
-    const [checkUserRole] = useCheckUserRoleMutation();
 
     const locationRef = useRef(null);
     const locationMenuRef = useRef(null); // portaled city list (outside <header>, which clips overflow)
@@ -110,57 +78,14 @@ export const Navbar = () => {
 
     const hiddenPaths = ["/login", "/register", "/forgot-password"];
 
-    const getApiBaseUrl = () => {
-        const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-        const normalizedBaseUrl = rawBaseUrl.replace(/\/$/, '');
-        return normalizedBaseUrl.endsWith('/api') ? normalizedBaseUrl : `${normalizedBaseUrl}/api`;
-    };
-
-    const fetchSellerStatus = async (currentUser) => {
-        if (!currentUser?.id) return null;
-        const token = localStorage.getItem('vehiclehub_token');
-        if (!token) return null;
-        try {
-            const response = await fetch(`${getApiBaseUrl()}/sellers/${currentUser.id}/seller-status`, {
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            });
-            if (!response.ok) return null;
-            return response.json();
-        } catch (error) {
-            console.error('Seller status fetch failed', error);
-            return null;
-        }
-    };
-
-    // Check registration status once per user/role change — only cares about isSellerRegistered
-    useEffect(() => {
-        let cancelled = false;
-
-        const checkStatus = async () => {
-            if (!isAuthenticated || role !== 'seller') {
-                setSellerRegistered(null);
-                return;
-            }
-            setCheckingSellerStatus(true);
-            const status = await fetchSellerStatus(user);
-            if (!cancelled) {
-                setSellerRegistered(!!status?.isSellerRegistered);
-                setCheckingSellerStatus(false);
-            }
-        };
-
-        checkStatus();
-        return () => { cancelled = true; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isAuthenticated, role, user?.id]);
-
-    // Profile complete (registered) -> straight to dashboard. Not registered -> registration form.
+    // Dashboard button: each role goes to its own dashboard. Sellers are re-checked with the
+    // server (an approval / rejection may have happened since this session started).
     const goToDashboard = () => {
-        if (role === 'seller') {
-            navigate(sellerRegistered ? '/seller/dashboard' : '/seller-Register');
+        if (role === 'seller' || role === 'dealer') {
+            openSellerArea({ navigate, user, completeAuth });
             return;
         }
-        navigate(getDashboardPathForRole(role));
+        navigate(dashboardPathFor(role));
     };
 
     useEffect(() => {
@@ -172,15 +97,9 @@ export const Navbar = () => {
 
     if (hiddenPaths.includes(location.pathname)) return null;
 
-    // SELL button: registered sellers go straight to dashboard, everyone else to the registration form
-    const redirectToSellerArea = async (currentUser) => {
-        const status = await fetchSellerStatus(currentUser);
-        if (status?.success && status?.isSellerRegistered) {
-            navigate('/seller/dashboard');
-            return;
-        }
-        navigate('/seller-Register');
-    };
+    // SELL button: approved sellers -> seller dashboard; everyone else -> seller registration
+    // (which shows "under review" / "rejected" when an application already exists)
+    const redirectToSellerArea = (currentUser) => openSellerArea({ navigate, user: currentUser, completeAuth });
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -188,11 +107,6 @@ export const Navbar = () => {
         if (searchValue.trim()) params.set("q", searchValue.trim());
         navigate(`/search?${params.toString()}`);
         setMobileSearchOpen(false);
-    };
-
-    const toggleTheme = () => {
-        setDarkMode(!darkMode);
-        document.documentElement.classList.toggle("dark");
     };
 
     const handleLogout = () => {
@@ -339,14 +253,6 @@ export const Navbar = () => {
 
                 {/* Desktop right-side actions */}
                 <div className="cursor-pointer hidden shrink-0 items-center gap-4 lg:flex">
-                    {/* <button
-                        onClick={toggleTheme}
-                        className="cursor-pointer flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white shadow-md transition-all duration-200 hover:scale-110 hover:shadow-lg active:scale-95"
-                        aria-label="Toggle theme"
-                    >
-                        {darkMode ? <Sun className="h-5 w-5 text-[#001f3f]" /> : <Moon className="h-5 w-5 text-slate-700" />}
-                    </button> */}
-
                     {!hideWishlist && (
                         <button
                             onClick={() => (isAuthenticated ? navigate('/buyer/dashboard/wishlist') : requireAuth(() => navigate('/buyer/dashboard/wishlist')))}
@@ -360,7 +266,7 @@ export const Navbar = () => {
                     {isAuthenticated ? (
                         <>
                             <button
-                                onClick={() => navigate(getNotificationsPathForRole(role))}
+                                onClick={() => navigate(notificationsPathFor(role))}
                                 className="cursor-pointer flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-slate-600 transition-all duration-150 hover:bg-slate-50 hover:text-slate-900 active:scale-95"
                             >
                                 <span className="relative">
@@ -482,13 +388,6 @@ export const Navbar = () => {
                         <p className="flex items-center gap-1.5 text-sm text-slate-600">
                             <MapPin size={14} className="shrink-0 text-[#001f3f]" /> {selectedCity}
                         </p>
-                        {/* <button
-                            onClick={toggleTheme}
-                            className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 transition active:scale-90"
-                            aria-label="Toggle theme"
-                        >
-                            {darkMode ? <Sun className="h-4 w-4 text-[#001f3f]" /> : <Moon className="h-4 w-4 text-slate-700" />}
-                        </button> */}
                     </div>
 
                     <div className="mt-3 flex flex-col gap-2">
@@ -497,7 +396,7 @@ export const Navbar = () => {
                                 <button onClick={() => navigate("/chat")} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-slate-700 transition hover:bg-slate-50 active:scale-[0.98]">
                                     <MessageCircle size={16} /> Chat
                                 </button>
-                                <button onClick={() => navigate(getNotificationsPathForRole(role))} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-slate-700 transition hover:bg-slate-50 active:scale-[0.98]">
+                                <button onClick={() => navigate(notificationsPathFor(role))} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-slate-700 transition hover:bg-slate-50 active:scale-[0.98]">
                                     <Bell size={16} /> Notifications
                                 </button>
                             </>
@@ -514,15 +413,14 @@ export const Navbar = () => {
                             onClick={() => {
                                 if (isAuthenticated) {
                                     setProfileOpen(false);
-                                    navigate('/profile');
+                                    navigate(profilePathFor(role));
                                     return;
                                 }
                                 requireAuth((nextUser) => {
-                                    const nextRole = (nextUser?.role || nextUser?.userRole || 'buyer').toLowerCase();
-                                    if (nextRole === 'seller') {
+                                    if (['seller', 'dealer'].includes(normalizeRole(nextUser?.role))) {
                                         redirectToSellerArea(nextUser);
                                     } else {
-                                        navigate('/profile');
+                                        navigate(profilePathFor(nextUser?.role));
                                     }
                                 });
                             }}

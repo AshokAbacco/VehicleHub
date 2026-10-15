@@ -1,5 +1,9 @@
+// VehicleHub/VehicleHub/src/components/admin/SellerVerificationModal.jsx
 import { useEffect, useRef, useState } from 'react';
-import { X, CheckCircle2, XCircle, Building2, MapPin, ShieldCheck, Landmark, FileText } from 'lucide-react';
+import { X, CheckCircle2, XCircle, Building2, MapPin, ShieldCheck, Landmark, FileText, ExternalLink } from 'lucide-react';
+
+const isImage = (url) => /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(String(url || '')) || String(url || '').startsWith('data:image');
+const DOC_LABEL = { PAN_CARD: 'PAN Card', GST_CERTIFICATE: 'GST Certificate', PROFILE_PHOTO: 'Profile Photo', SHOP_LOGO: 'Shop Logo' };
 
 const Row = ({ label, value }) => (
     <div className="rounded-xl bg-slate-50 p-3">
@@ -11,7 +15,8 @@ const SectionTitle = ({ icon: Icon, children }) => (
     <h3 className="mb-3 flex items-center gap-2 border-b border-slate-100 pb-2 text-sm font-bold text-slate-900"><Icon size={15} className="text-[#001f3f]" /> {children}</h3>
 );
 
-export const SellerVerificationModal = ({ seller, onClose, onApprove, onReject }) => {
+// readOnly: viewing an already rejected application (no approve/reject buttons)
+export const SellerVerificationModal = ({ seller, onClose, onApprove, onReject, readOnly = false }) => {
     const [reason, setReason] = useState('');
     const [showReject, setShowReject] = useState(false);
     const ref = useRef(null);
@@ -29,7 +34,7 @@ export const SellerVerificationModal = ({ seller, onClose, onApprove, onReject }
             <div ref={ref} className="relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
                 <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
                     <div>
-                        <p className="text-xs font-semibold uppercase text-amber-600">Pending Verification</p>
+                        <p className={`text-xs font-semibold uppercase ${readOnly ? 'text-red-600' : 'text-amber-600'}`}>{readOnly ? 'Rejected Application' : 'Pending Verification'}</p>
                         <h2 className="text-lg font-bold text-slate-900">{seller.businessName || seller.ownerName}</h2>
                     </div>
                     <button onClick={onClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
@@ -74,13 +79,35 @@ export const SellerVerificationModal = ({ seller, onClose, onApprove, onReject }
                             <Row label="IFSC" value={seller.bankIFSC} />
                         </div>
                     </div>
+                    {seller.documents?.length > 0 && (
+                        <div>
+                            <SectionTitle icon={FileText}>Uploaded Documents</SectionTitle>
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                {seller.documents.map((doc) => (
+                                    <a key={doc.id} href={doc.fileUrl} target="_blank" rel="noreferrer" className="group rounded-xl border border-slate-200 p-2 text-center text-xs font-medium text-slate-600 transition hover:border-[#001f3f]/40">
+                                        {isImage(doc.fileUrl) ? (
+                                            <img src={doc.fileUrl} alt={DOC_LABEL[doc.type] || doc.type} className="mb-1.5 h-20 w-full rounded-lg object-cover" />
+                                        ) : (
+                                            <span className="mb-1.5 flex h-20 w-full items-center justify-center rounded-lg bg-slate-50 text-slate-400"><FileText size={22} /></span>
+                                        )}
+                                        <span className="inline-flex items-center gap-1">{DOC_LABEL[doc.type] || doc.type} <ExternalLink size={10} /></span>
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {readOnly && seller.rejectReason && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                            <span className="font-semibold">Rejection reason:</span> {seller.rejectReason}
+                        </div>
+                    )}
                     <div>
                         <SectionTitle icon={FileText}>Description</SectionTitle>
                         <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{seller.description || '—'}</p>
                     </div>
                 </div>
 
-                <div className="shrink-0 space-y-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4">
+                {!readOnly && <div className="shrink-0 space-y-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4">
                     {showReject && (
                         <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="Reason for rejection..." className="w-full rounded-xl border-2 border-red-200 bg-red-50/50 px-4 py-2.5 text-sm focus:border-red-400 focus:outline-none" />
                     )}
@@ -97,7 +124,7 @@ export const SellerVerificationModal = ({ seller, onClose, onApprove, onReject }
                             </>
                         )}
                     </div>
-                </div>
+                </div>}
             </div>
         </div>
     );

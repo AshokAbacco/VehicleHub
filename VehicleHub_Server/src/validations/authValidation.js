@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub_Server/src/validations/authValidation.js
 import Joi from "joi";
 
 export const registerSchema = Joi.object({
@@ -9,14 +10,11 @@ export const registerSchema = Joi.object({
   phone: Joi.string().optional(),
   role: Joi.string()
     .valid(
-      "SUPER_ADMIN",
       "ADMIN",
       "SELLER",
-      "BUYER",
       "DEALER",
+      "BUYER",
       "INSPECTOR",
-      "FINANCE",
-      "SUPPORT",
     )
     .optional(),
 });

@@ -1,6 +1,6 @@
 // VehicleHub/VehicleHub/src/App.jsx
 import './App.css';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HelmetProvider } from 'react-helmet-async';
 import { Toaster } from 'react-hot-toast';
@@ -8,7 +8,6 @@ import { Provider } from 'react-redux';
 import { store } from './store/store.js';
 import { Navbar } from './components/layout/Navbar.jsx';
 import { Footer } from './components/layout/Footer.jsx';
-import { DashboardLayout } from './components/layout/DashboardLayout.jsx';
 import { SellerDashboardLayout } from './components/seller/SellerDashboardLayout.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { AuthGateProvider } from './context/AuthGateContext.jsx';
@@ -46,6 +45,7 @@ import { SoldVehiclesPage } from './components/seller/SoldVehiclesPage.jsx';
 
 import { InspectionRequestsPage } from './components/seller/InspectionRequestsPage.jsx';
 import { InspectionDetailByID } from './components/field-inspector/InspectionDetailByID.jsx';
+import { InspectionsPage } from './components/admin/InspectionsPage.jsx';
 import { InvoicesPage } from './components/seller/InvoicesPage.jsx';
 import { PaymentsPage } from './components/seller/PaymentsPage.jsx';
 import { useAuthGate } from './context/AuthGateContext.jsx';
@@ -74,10 +74,7 @@ import { Profile } from './components/auth/Profile.jsx';
 import { SellerProfilePage } from './components/seller/SellerProfile.jsx';
 import { SellerNotificationsPage } from './components/seller/SellerNotificationsPage.jsx';
 import { SellerPurchaseRequestsPage } from './components/seller/SellerPurchaseRequestsPage.jsx';
-import { DealerDashboardPage, DealerInventoryPage, DealerLeadsPage, DealerAnalyticsPage, DealerSettingsPage } from './pages/dashboard/DealerDashboardPage.jsx';
-import { FinanceDashboardPage, FinanceLoansPage, FinancePaymentsPage, FinanceReportsPage, FinanceSettingsPage } from './pages/dashboard/FinanceDashboardPage.jsx';
-import { SupportDashboardPage, SupportTicketsPage, SupportChatPage, SupportReportsPage, SupportSettingsPage } from './pages/dashboard/SupportDashboardPage.jsx';
-import { SuperAdminDashboardPage, SuperAdminUsersPage, SuperAdminSecurityPage, SuperAdminAnalyticsPage, SuperAdminSettingsPage } from './pages/dashboard/SuperAdminDashboardPage.jsx';
+import { dashboardPathFor, normalizeRole } from './utils/roleAccess.js';
 
 // ---- Field Inspector module ----
 import { FieldInspectorLayout } from './components/layout/FieldInspectorLayout.jsx';
@@ -97,13 +94,21 @@ import { InspectionCalendar } from './components/field-inspector/InspectionCalen
 
 const queryClient = new QueryClient();
 
+const RoleHome = () => {
+  const { user } = useAuthGate();
+  return <Navigate to={dashboardPathFor(user?.role || user?.userRole)} replace />;
+};
+
+// Login roles: admin, seller (individual), dealer (shop), buyer, inspector (Field Inspector).
+// Not signed in -> /login (then back here). Wrong role -> that user's own dashboard.
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, isAuthenticated } = useAuthGate();
-  const normalizedUserRole = String(user?.role || user?.userRole || '').toLowerCase().replace(/-/g, '_');
-  const normalizedAllowed = (allowedRoles || []).map((role) => String(role).toLowerCase().replace(/-/g, '_'));
+  const location = useLocation();
+  const userRole = normalizeRole(user?.role || user?.userRole);
+  const allowed = (allowedRoles || []).map(normalizeRole);
 
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (allowedRoles && !normalizedAllowed.includes(normalizedUserRole)) return <Navigate to="/" replace />;
+  if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  if (allowedRoles && !allowed.includes(userRole)) return <Navigate to={dashboardPathFor(userRole)} replace />;
   return children;
 };
 
@@ -137,10 +142,13 @@ const MainLayout = () => {
 
 const BuyerDashboardShell = () => <BuyerLayout />;
 
-const SellerDashboardShell = () => (
+// Shared by the Seller (/seller/*, individual — one vehicle) and Dealer (/dealer/*, shop — many
+// vehicles) roles. Same pages; the server scopes every record to the signed-in account and
+// enforces the Seller's one-listing limit.
+const SellerDashboardShell = ({ base = '/seller' }) => (
   <SellerDashboardLayout>
     <Routes>
-      <Route path="" element={<Navigate to="/seller/dashboard" replace />} />
+      <Route path="" element={<Navigate to={`${base}/dashboard`} replace />} />
       <Route path="dashboard" element={<SellerDashboardPage />} />
       <Route path="dashboard/add-vehicle" element={<AddVehicleForm />} />
       <Route path="dashboard/inventory" element={<InventoryOverviewTable />} />
@@ -157,13 +165,6 @@ const SellerDashboardShell = () => (
       <Route path="/profile" element={<Profile />} />
       <Route path="dashboard/notifications" element={<SellerNotificationsPage />} />
       <Route path="dashboard/purchase-requests" element={<SellerPurchaseRequestsPage />} />
-      {/* //================================ */}
-      <Route path="dashboard/purchase-requests/:id" element={<InspectionDetailByID />} />
-      <Route path="dashboard/purchase-requests/:id/verify" element={<InspectionVerify />} />
-      <Route path="dashboard/purchase-requests/:id/reports" element={<FieldInspectorReports />} />
-      <Route path="dashboard/purchase-requests/:id/reports/:reportId" element={<FieldInspectorReportDetail />} />
-      <Route path="dashboard/purchase-requests/calendar" element={<InspectionCalendar />} />
-      <Route path="dashboard/purchase-requests/profile" element={<FieldInspectorProfile />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   </SellerDashboardLayout>
@@ -181,8 +182,9 @@ const AdminDashboardShell = () => (
       <Route path="dashboard/buyers" element={<BuyersPage />} />
       <Route path="dashboard/carts" element={<CartsPage />} />
       <Route path="dashboard/revenue" element={<RevenuePage />} />
-
-      <Route path="dashboard/payments" element={<AdminPaymentsPage />} />
+      <Route path="dashboard/orders" element={<AdminPaymentsPage />} />
+      <Route path="dashboard/inspections" element={<InspectionsPage />} />
+      <Route path="dashboard/payments" element={<Navigate to="/admin/dashboard/orders" replace />} />
       {/* <Route path="dashboard/messages" element={<AdminMessagesPage />} /> */}
       <Route path="dashboard/messages" element={<MessagesPage />} />
       <Route path="dashboard/notifications" element={<NotificationsPage />} />
@@ -190,62 +192,6 @@ const AdminDashboardShell = () => (
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   </AdminDashboardLayout>
-);
-
-const DealerDashboardShell = () => (
-  <DashboardLayout>
-    <Routes>
-      <Route path="" element={<Navigate to="/dealer/dashboard" replace />} />
-      <Route path="dashboard" element={<DealerDashboardPage />} />
-      <Route path="dashboard/inventory" element={<DealerInventoryPage />} />
-      <Route path="dashboard/leads" element={<DealerLeadsPage />} />
-      <Route path="dashboard/analytics" element={<DealerAnalyticsPage />} />
-      <Route path="dashboard/settings" element={<DealerSettingsPage />} />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
-  </DashboardLayout>
-);
-
-const FinanceDashboardShell = () => (
-  <DashboardLayout>
-    <Routes>
-      <Route path="" element={<Navigate to="/finance/dashboard" replace />} />
-      <Route path="dashboard" element={<FinanceDashboardPage />} />
-      <Route path="dashboard/loans" element={<FinanceLoansPage />} />
-      <Route path="dashboard/payments" element={<FinancePaymentsPage />} />
-      <Route path="dashboard/reports" element={<FinanceReportsPage />} />
-      <Route path="dashboard/settings" element={<FinanceSettingsPage />} />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
-  </DashboardLayout>
-);
-
-const SupportDashboardShell = () => (
-  <DashboardLayout>
-    <Routes>
-      <Route path="" element={<Navigate to="/support/dashboard" replace />} />
-      <Route path="dashboard" element={<SupportDashboardPage />} />
-      <Route path="dashboard/tickets" element={<SupportTicketsPage />} />
-      <Route path="dashboard/chat" element={<SupportChatPage />} />
-      <Route path="dashboard/reports" element={<SupportReportsPage />} />
-      <Route path="dashboard/settings" element={<SupportSettingsPage />} />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
-  </DashboardLayout>
-);
-
-const SuperAdminDashboardShell = () => (
-  <DashboardLayout>
-    <Routes>
-      <Route path="" element={<Navigate to="/super-admin/dashboard" replace />} />
-      <Route path="dashboard" element={<SuperAdminDashboardPage />} />
-      <Route path="dashboard/users" element={<SuperAdminUsersPage />} />
-      <Route path="dashboard/security" element={<SuperAdminSecurityPage />} />
-      <Route path="dashboard/analytics" element={<SuperAdminAnalyticsPage />} />
-      <Route path="dashboard/settings" element={<SuperAdminSettingsPage />} />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
-  </DashboardLayout>
 );
 
 function App() {
@@ -274,18 +220,16 @@ function App() {
                     <Route path="dashboard/settings" element={<BuyerSettingsPage />} />
                     <Route path="*" element={<NotFoundPage />} />
                   </Route>
-                  <Route path="/seller/*" element={<ProtectedRoute allowedRoles={['seller']}><SellerDashboardShell /></ProtectedRoute>} />
+                  <Route path="/seller/*" element={<ProtectedRoute allowedRoles={['seller']}><SellerDashboardShell base="/seller" /></ProtectedRoute>} />
+                  <Route path="/dealer/*" element={<ProtectedRoute allowedRoles={['dealer']}><SellerDashboardShell base="/dealer" /></ProtectedRoute>} />
                   <Route path="/admin/*" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboardShell /></ProtectedRoute>} />
-                  <Route path="/dealer/*" element={<ProtectedRoute allowedRoles={['dealer']}><DealerDashboardShell /></ProtectedRoute>} />
-                  <Route path="/finance/*" element={<ProtectedRoute allowedRoles={['finance']}><FinanceDashboardShell /></ProtectedRoute>} />
-                  <Route path="/support/*" element={<ProtectedRoute allowedRoles={['support']}><SupportDashboardShell /></ProtectedRoute>} />
-                  <Route path="/super-admin/*" element={<ProtectedRoute allowedRoles={['super_admin', 'super-admin']}><SuperAdminDashboardShell /></ProtectedRoute>} />
 
-                  {/* Field Inspector — protected, restricted to the FIELD_INSPECTOR role */}
+                  {/* Field Inspector — server role INSPECTOR ("inspector" in the session).
+                      This used to allow only "field_inspector", so inspectors were bounced to the home page. */}
                   <Route
                     path="/field-inspector"
                     element={
-                      <ProtectedRoute allowedRoles={['field_inspector']}>
+                      <ProtectedRoute allowedRoles={['inspector']}>
                         <FieldInspectorLayout />
                       </ProtectedRoute>
                     }
@@ -309,7 +253,8 @@ function App() {
                     <Route path="*" element={<NotFoundPage />} />
                   </Route>
 
-                  <Route path="/dashboard/*" element={<ProtectedRoute><Navigate to="/buyer/dashboard" replace /></ProtectedRoute>} />
+                  {/* /dashboard -> the signed-in user's own dashboard */}
+                  <Route path="/dashboard/*" element={<ProtectedRoute><RoleHome /></ProtectedRoute>} />
                 </Routes>
               </AuthGateProvider>
             </BrowserRouter>

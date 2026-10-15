@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub_Server/app.js
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -19,7 +20,9 @@ import VehicleRoutes from "./src/routes/vehicleRoutes.js";
 
 const app = express();
 
-app.use(helmet());
+// crossOriginResourcePolicy: the frontend runs on a different origin/port.
+// Uploaded files live in Cloudflare R2 (see src/utils/storeUpload.js), not on this server.
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN || "*",
@@ -31,6 +34,7 @@ app.use(morgan("dev"));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
 
 
  // Routs

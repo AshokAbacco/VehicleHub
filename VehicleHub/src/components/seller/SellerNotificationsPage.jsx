@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/components/seller/SellerNotificationsPage.jsx
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -61,7 +62,7 @@ export const SellerNotificationsPage = () => {
 
     return (
         <div className="space-y-6">
-            <Helmet><title>Notifications | VehicleHub Seller</title></Helmet>
+            <Helmet><title>Notifications | VehicleHub</title></Helmet>
 
             {/* Gradient hero header */}
             <div className="animate-fadeInUp relative overflow-hidden rounded-2xl bg-linear-to-br from-[#001f3f] via-[#002a55] to-[#003d7a] p-6 shadow-lg shadow-[#001f3f]/20 sm:p-7">

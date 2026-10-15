@@ -1,7 +1,17 @@
-import { PrismaClient } from "@prisma/client";
+// VehicleHub/VehicleHub_Server/src/controllers/sellerController.js
+// ============================================================
+// SELLER REGISTRATION + SELLER PROFILE — mounted in routes/sellerRoutes.js
+//
+// Flow: a logged-in BUYER submits POST /api/sellers/register -> SellerProfile PENDING.
+//       They stay a BUYER until an admin approves them (routes/adminRoutes.js ->
+//       PATCH /api/admin/sellers/:id/approve), which switches the role to SELLER.
+//       A rejected applicant can correct the form and submit again.
+// ============================================================
 import { z } from "zod";
-
-const prisma = new PrismaClient();
+import { prisma } from "../config/db.js";
+import { storeUpload, deleteStoredFiles } from "../utils/storeUpload.js";
+import { normalizePhone } from "../utils/phone.js";
+import { SELLING_ROLES, roleForSellerType, listingAllowance, accountTypeLabel } from "../utils/sellerAccount.js";
 
 // ============================================================
 // Validation schemas
@@ -26,71 +36,36 @@ const sellerRegistrationSchema = z.object({
   bankIFSC: z.string().optional().nullable(),
   bankName: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
+}).superRefine((d, ctx) => {
+  // A dealer account is a shop — it needs the shop / business name
+  if (d.sellerType === "Dealer" && !String(d.businessName || "").trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["businessName"], message: "Shop / business name is required for a dealer account" });
+  }
 });
 
-const rejectSchema = z.object({
-  reason: z.string().min(3, "Rejection reason is required"),
-});
+// Files arrive as multer memory files (req.files[field][0]); stored in Cloudflare R2
+const uploadField = async (req, field, folder = "vehiclehub/sellers") => {
+  const file = req.files?.[field]?.[0];
+  return file ? storeUpload(file, folder, req) : null;
+};
 
-// ============================================================
-// Helpers
-// ============================================================
-
-const toSellerProfileDTO = (profile) => ({
-  id: profile.id,
-  userId: profile.userId,
-  ownerName: profile.ownerName,
-  businessName: profile.businessName,
-  sellerType: profile.sellerType,
-  email: profile.user?.email,
-  phone: profile.user?.phone,
-  address: profile.address,
-  city: profile.city,
-  state: profile.state,
-  pincode: profile.pincode,
-  country: profile.country,
-  gstNumber: profile.gstNumber,
-  panNumber: profile.panNumber,
-  yearsInBusiness: profile.yearsInBusiness,
-  website: profile.website,
-  bankAccountHolder: profile.bankAccountHolder,
-  bankAccountNumber: profile.bankAccountNumber,
-  bankIFSC: profile.bankIFSC,
-  bankName: profile.bankName,
-  description: profile.description,
-  profilePhoto: profile.profilePhoto,
-  shopLogo: profile.shopLogo,
-  verificationStatus: profile.verificationStatus,
-  rejectReason: profile.rejectReason,
-  submittedAt: profile.submittedAt,
-  reviewedAt: profile.reviewedAt,
-  isElite: profile.isElite,
-  rating: profile.rating,
-  totalReviews: profile.totalReviews,
-  documents: profile.documents,
-});
-
-// Files can arrive either as multer's `req.files` (multipart) or already-uploaded URLs in `req.body`
-const extractFileUrl = (req, fieldName) => {
-  const file =
-    req.files?.find?.((f) => f.fieldname === fieldName) ||
-    req.files?.[fieldName]?.[0];
-  return file?.path || file?.location || req.body?.[fieldName] || null;
+const notifyAdmins = async (tx, data) => {
+  const admins = await tx.user.findMany({ where: { role: "ADMIN", isActive: true }, select: { id: true } });
+  if (!admins.length) return;
+  await tx.notification.createMany({ data: admins.map((a) => ({ ...data, userId: a.id })) });
 };
 
 // ============================================================
-// POST /api/sellers/register
-// Called by SellerRegistration.jsx on submit. Creates the SellerProfile
-// as PENDING and attaches any uploaded documents.
+// POST /api/sellers/register   (multipart: profilePhoto, shopLogo, panCardImage, gstCertificate)
 // ============================================================
-
 export const registerSeller = async (req, res) => {
   try {
-    const userId = req.user?.id; // set by auth middleware after phone/OTP verification
+    const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({
-        message: "Authentication required before registering as a seller.",
-      });
+      return res.status(401).json({ message: "Authentication required before registering as a seller." });
+    }
+    if (req.user.role !== "BUYER" && !SELLING_ROLES.includes(req.user.role)) {
+      return res.status(403).json({ message: "Admin and field inspector accounts can't register as sellers." });
     }
 
     const parsed = sellerRegistrationSchema.safeParse(req.body);
@@ -102,111 +77,100 @@ export const registerSeller = async (req, res) => {
     }
     const data = parsed.data;
 
-    // Prevent duplicate registration
-    const existing = await prisma.sellerProfile.findUnique({
-      where: { userId },
-    });
-    if (existing) {
+    // One application per account. A rejected applicant may resubmit.
+    const existing = await prisma.sellerProfile.findUnique({ where: { userId } });
+    if (existing && existing.verificationStatus !== "REJECTED") {
       return res.status(409).json({
-        message: "A seller registration already exists for this account.",
+        message:
+          existing.verificationStatus === "APPROVED"
+            ? `Your ${existing.sellerType === "DEALER" ? "dealer" : "seller"} account is already approved.`
+            : "Your seller application is already under review.",
         status: existing.verificationStatus,
       });
     }
 
-    const profilePhotoUrl = extractFileUrl(req, "profilePhoto");
-    const shopLogoUrl = extractFileUrl(req, "shopLogo");
-    const panCardUrl = extractFileUrl(req, "panCardImage");
-    const gstCertUrl = extractFileUrl(req, "gstCertificate");
+    const [profilePhotoUrl, shopLogoUrl, panCardUrl, gstCertUrl] = await Promise.all([
+      uploadField(req, "profilePhoto"),
+      uploadField(req, "shopLogo"),
+      uploadField(req, "panCardImage"),
+      uploadField(req, "gstCertificate"),
+    ]);
+
+    const profileData = {
+      sellerType: data.sellerType === "Dealer" ? "DEALER" : "INDIVIDUAL",
+      ownerName: data.ownerName,
+      businessName: data.businessName || null,
+      description: data.description || null,
+      address: data.address,
+      city: data.city,
+      state: data.state,
+      pincode: data.pincode,
+      gstNumber: data.gstNumber || null,
+      panNumber: data.panNumber,
+      yearsInBusiness: data.yearsInBusiness ? Number(data.yearsInBusiness) : null,
+      website: data.website || null,
+      bankAccountHolder: data.bankAccountHolder || null,
+      bankAccountNumber: data.bankAccountNumber || null,
+      bankIFSC: data.bankIFSC || null,
+      bankName: data.bankName || null,
+      ...(profilePhotoUrl ? { profilePhoto: profilePhotoUrl } : {}),
+      ...(shopLogoUrl ? { shopLogo: shopLogoUrl } : {}),
+      verificationStatus: "PENDING",
+      isApproved: false,
+      rejectReason: null,
+      submittedAt: new Date(),
+      reviewedAt: null,
+      reviewedBy: null,
+    };
 
     const result = await prisma.$transaction(async (tx) => {
-      const profile = await tx.sellerProfile.create({
-        data: {
-          userId,
-          sellerType: data.sellerType === "Dealer" ? "DEALER" : "INDIVIDUAL",
-          ownerName: data.ownerName,
-          businessName: data.businessName || null,
-          description: data.description || null,
-          address: data.address,
-          city: data.city,
-          state: data.state,
-          pincode: data.pincode,
-          gstNumber: data.gstNumber || null,
-          panNumber: data.panNumber,
-          yearsInBusiness: data.yearsInBusiness
-            ? Number(data.yearsInBusiness)
-            : null,
-          website: data.website || null,
-          bankAccountHolder: data.bankAccountHolder || null,
-          bankAccountNumber: data.bankAccountNumber || null,
-          bankIFSC: data.bankIFSC || null,
-          bankName: data.bankName || null,
-          profilePhoto: profilePhotoUrl,
-          shopLogo: shopLogoUrl,
-          verificationStatus: "PENDING",
-        },
-      });
+      const profile = existing
+        ? await tx.sellerProfile.update({ where: { id: existing.id }, data: profileData })
+        : await tx.sellerProfile.create({ data: { userId, ...profileData } });
 
-      // Attach uploaded compliance documents
-      const docsToCreate = [];
-      if (panCardUrl)
-        docsToCreate.push({
-          sellerProfileId: profile.id,
-          type: "PAN_CARD",
-          fileUrl: panCardUrl,
+      const docs = [
+        [panCardUrl, "PAN_CARD"],
+        [gstCertUrl, "GST_CERTIFICATE"],
+        [profilePhotoUrl, "PROFILE_PHOTO"],
+        [shopLogoUrl, "SHOP_LOGO"],
+      ].filter(([url]) => url);
+      if (docs.length) {
+        await tx.sellerDocument.createMany({
+          data: docs.map(([fileUrl, type]) => ({ sellerProfileId: profile.id, type, fileUrl })),
         });
-      if (gstCertUrl)
-        docsToCreate.push({
-          sellerProfileId: profile.id,
-          type: "GST_CERTIFICATE",
-          fileUrl: gstCertUrl,
-        });
-      if (profilePhotoUrl)
-        docsToCreate.push({
-          sellerProfileId: profile.id,
-          type: "PROFILE_PHOTO",
-          fileUrl: profilePhotoUrl,
-        });
-      if (shopLogoUrl)
-        docsToCreate.push({
-          sellerProfileId: profile.id,
-          type: "SHOP_LOGO",
-          fileUrl: shopLogoUrl,
-        });
-      if (docsToCreate.length) {
-        await tx.sellerDocument.createMany({ data: docsToCreate });
       }
 
-      // Update the user's fullName/phone if this registration provided better data,
-      // and flag their intended role as SELLER (actual role flip happens on approval).
-      // NOTE: User has no `isSeller` column — role = SELLER is the seller flag.
-      // `phone` is @unique, so only update it when no other account uses it.
-      const phoneOwner = data.phone
-        ? await tx.user.findFirst({
-            where: { phone: data.phone, NOT: { id: userId } },
-            select: { id: true },
-          })
+      // Keep the account details in sync with the application. The role stays BUYER
+      // until an admin approves. `phone` is @unique, so only update it when it's free.
+      // Same "+91…" format the phone sign-in uses, or the next sign-in would create a new account
+      const phone = normalizePhone(data.phone);
+      const phoneOwner = phone
+        ? await tx.user.findFirst({ where: { phone, NOT: { id: userId } }, select: { id: true } })
         : null;
-
       await tx.user.update({
         where: { id: userId },
         data: {
           fullName: data.ownerName,
-          ...(data.phone && !phoneOwner ? { phone: data.phone } : {}),
-          role: "SELLER",
+          ...(phone && !phoneOwner ? { phone } : {}),
         },
       });
 
-      // Log the submission for the admin activity feed
+      await notifyAdmins(tx, {
+        type: "SYSTEM_ALERT",
+        title: existing
+          ? `${data.sellerType === "Dealer" ? "Dealer" : "Seller"} application resubmitted`
+          : `New ${data.sellerType === "Dealer" ? "dealer" : "seller"} registration`,
+        message: `${data.businessName || data.ownerName} is waiting for verification.`,
+        metadata: { kind: "seller_registration", sellerUserId: userId, sellerProfileId: profile.id },
+      });
+
       await tx.activityLog.create({
         data: {
           userId,
-          action: "seller.registration_submitted",
+          action: existing ? "seller.registration_resubmitted" : "seller.registration_submitted",
           entityType: "SellerProfile",
           entityId: profile.id,
-          metadata: {
-            businessName: data.businessName,
-            sellerType: data.sellerType,
-          },
+          metadata: { businessName: data.businessName, sellerType: data.sellerType },
         },
       });
 
@@ -214,8 +178,8 @@ export const registerSeller = async (req, res) => {
     });
 
     return res.status(201).json({
-      message:
-        "Registration submitted for verification. You will be notified once reviewed.",
+      success: true,
+      message: "Registration submitted for verification. You will be notified once an admin reviews it.",
       sellerProfile: {
         id: result.id,
         verificationStatus: result.verificationStatus,
@@ -229,114 +193,174 @@ export const registerSeller = async (req, res) => {
   }
 };
 
-// admin dashboard route to fetch seller dashboard data
-export const getSellerDashboard = async (req, res) => {
+// ============================================================
+// GET /api/sellers/me/status  (also /api/sellers/:sellerId/seller-status — always the logged-in user)
+// ============================================================
+export const getSellerStatus = async (req, res) => {
   try {
-    if (!["ADMIN", "SUPER_ADMIN"].includes(req.user.role)) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied",
-      });
-    }
-
-    const { sellerId } = req.params;
-
-    const seller = await prisma.user.findUnique({
-      where: {
-        id: sellerId,
-      },
-      include: {
-        vehicles: {
-          orderBy: {
-            createdAt: "desc",
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        role: true,
+        sellerProfile: {
+          select: {
+            id: true, ownerName: true, businessName: true, sellerType: true,
+            verificationStatus: true, rejectReason: true, submittedAt: true, reviewedAt: true,
           },
         },
       },
     });
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-    if (!seller) {
-      return res.status(404).json({
-        success: false,
-        message: "Seller not found",
-      });
-    }
+    const status = user.sellerProfile?.verificationStatus || null;
+    const approvedRole = user.sellerProfile ? roleForSellerType(user.sellerProfile.sellerType) : null;
+    const isApproved = status === "APPROVED" && SELLING_ROLES.includes(user.role);
+    return res.json({
+      success: true,
+      role: user.role,
+      isSellerRegistered: !!user.sellerProfile,
+      status, // null | PENDING | APPROVED | REJECTED | SUSPENDED
+      isApproved,
+      // "Seller" (individual, one vehicle at a time) | "Dealer" (shop, many vehicles)
+      accountType: accountTypeLabel(isApproved ? user.role : approvedRole),
+      listingAllowance: isApproved ? await listingAllowance(user) : null,
+      rejectReason: user.sellerProfile?.rejectReason || null,
+      sellerProfile: user.sellerProfile,
+    });
+  } catch (error) {
+    console.error("SELLER STATUS ERROR:", error);
+    return res.status(500).json({ success: false, message: "Failed to check seller status" });
+  }
+};
 
-    const totalVehicles = seller.vehicles.length;
+// ============================================================
+// GET /api/sellers/:sellerId/dashboard   (admin)
+// ============================================================
+export const getSellerDashboard = async (req, res) => {
+  try {
+    const seller = await prisma.user.findUnique({
+      where: { id: req.params.sellerId },
+      include: { vehicles: { orderBy: { createdAt: "desc" } } },
+    });
+    if (!seller) return res.status(404).json({ success: false, message: "Seller not found" });
 
-    const availableVehicles = seller.vehicles.filter(
-      (vehicle) => vehicle.status === "AVAILABLE",
-    ).length;
-
-    const pendingVehicles = seller.vehicles.filter(
-      (vehicle) => vehicle.status === "PENDING",
-    ).length;
-
-    const soldVehicles = seller.vehicles.filter(
-      (vehicle) => vehicle.status === "SOLD",
-    ).length;
-
+    const count = (status) => seller.vehicles.filter((v) => v.status === status).length;
     res.json({
       success: true,
-      seller: {
-        id: seller.id,
-        name: `${seller.firstName || ""} ${seller.lastName || ""}`.trim(),
-        email: seller.email,
-        phone: seller.phone,
-        role: seller.role,
-      },
+      seller: { id: seller.id, name: seller.fullName, email: seller.email, phone: seller.phone, role: seller.role },
       statistics: {
-        totalVehicles,
-        availableVehicles,
-        pendingVehicles,
-        soldVehicles,
+        totalVehicles: seller.vehicles.length,
+        availableVehicles: count("AVAILABLE"),
+        pendingVehicles: count("PENDING"),
+        soldVehicles: count("SOLD"),
       },
       vehicles: seller.vehicles,
     });
   } catch (error) {
     console.error("Seller dashboard error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to load seller dashboard",
-    });
+    res.status(500).json({ success: false, message: "Failed to load seller dashboard" });
   }
 };
 
-export const getSellerStatus = async (req, res) => {
+// ============================================================
+// SELLER'S OWN BUSINESS PROFILE (SellerProfile.jsx)
+//   GET    /api/sellers/me/profile
+//   PATCH  /api/sellers/me/profile          multipart (profilePhoto optional)
+//   POST   /api/sellers/me/documents        multipart "documents" + documentType
+//   DELETE /api/sellers/me/documents/:documentId
+// ============================================================
+const profileInclude = {
+  user: { select: { id: true, fullName: true, email: true, phone: true, createdAt: true } },
+  documents: { orderBy: { uploadedAt: "desc" } },
+};
+
+const toProfileDTO = (p) => ({
+  ...p,
+  email: p.user?.email || null,
+  phone: p.user?.phone || null,
+  sellerType: p.sellerType === "DEALER" ? "Dealer" : "Individual",
+});
+
+export const getMyProfile = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const profile = await prisma.sellerProfile.findUnique({ where: { userId: req.user.id }, include: profileInclude });
+    if (!profile) return res.status(404).json({ success: false, message: "No seller profile found" });
+    return res.json({ success: true, data: toProfileDTO(profile) });
+  } catch (error) {
+    next(error);
+  }
+};
 
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-      include: {
-        sellerProfile: true,
-      },
+export const updateMyProfile = async (req, res, next) => {
+  try {
+    const profile = await prisma.sellerProfile.findUnique({ where: { userId: req.user.id } });
+    if (!profile) return res.status(404).json({ success: false, message: "No seller profile found" });
+
+    const b = req.body || {};
+    const data = {};
+    ["ownerName", "businessName", "description", "gstNumber", "panNumber", "address", "city", "state", "pincode", "website"].forEach((k) => {
+      if (b[k] !== undefined) data[k] = String(b[k]).trim() || null;
     });
+    if (data.ownerName === null) return res.status(400).json({ success: false, message: "Owner name is required" });
+    // sellerType is fixed once approved (it decides Seller vs Dealer access) — not editable here
+    const photo = await uploadField(req, "profilePhoto");
+    if (photo) data.profilePhoto = photo;
 
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
+    const userData = {};
+    if (data.ownerName) userData.fullName = data.ownerName;
+    if (b.phone !== undefined && String(b.phone).trim()) {
+      const phone = normalizePhone(b.phone);
+      const taken = await prisma.user.findFirst({ where: { phone, NOT: { id: req.user.id } }, select: { id: true } });
+      if (taken) return res.status(409).json({ success: false, message: "This phone number is already used by another account" });
+      userData.phone = phone;
     }
 
-    const isSellerRegistered = !!user.sellerProfile;
-    const isApproved = user.sellerProfile?.verificationStatus === "APPROVED";
-
-    return res.json({
-      success: true,
-      isSellerRegistered,
-      isApproved,
-      sellerProfile: user.sellerProfile,
-    });
+    const [updated] = await prisma.$transaction([
+      prisma.sellerProfile.update({ where: { id: profile.id }, data, include: profileInclude }),
+      ...(Object.keys(userData).length ? [prisma.user.update({ where: { id: req.user.id }, data: userData })] : []),
+    ]);
+    const fresh = await prisma.sellerProfile.findUnique({ where: { id: updated.id }, include: profileInclude });
+    return res.json({ success: true, message: "Profile updated", data: toProfileDTO(fresh) });
   } catch (error) {
-    console.error("SELLER STATUS ERROR:", error);
+    next(error);
+  }
+};
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to check seller status",
+const DOCUMENT_TYPES = ["PAN_CARD", "GST_CERTIFICATE", "SHOP_LOGO", "PROFILE_PHOTO", "RC", "INSURANCE", "POLLUTION", "INVOICE", "SERVICE_BOOK", "OWNERSHIP_PROOF", "OTHER"];
+
+export const uploadMyDocuments = async (req, res, next) => {
+  try {
+    const profile = await prisma.sellerProfile.findUnique({ where: { userId: req.user.id } });
+    if (!profile) return res.status(404).json({ success: false, message: "No seller profile found" });
+    const files = req.files?.documents || [];
+    if (!files.length) return res.status(400).json({ success: false, message: "Choose at least one file" });
+    const type = DOCUMENT_TYPES.includes(String(req.body?.documentType)) ? req.body.documentType : "OTHER";
+    const urls = [];
+    for (const f of files) urls.push(await storeUpload(f, "vehiclehub/sellers", req));
+    await prisma.sellerDocument.createMany({
+      data: urls.filter(Boolean).map((fileUrl) => ({ sellerProfileId: profile.id, type, fileUrl })),
     });
+    const fresh = await prisma.sellerProfile.findUnique({ where: { id: profile.id }, include: profileInclude });
+    return res.status(201).json({ success: true, message: "Document(s) uploaded", data: toProfileDTO(fresh) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteMyDocument = async (req, res, next) => {
+  try {
+    const profile = await prisma.sellerProfile.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+    if (!profile) return res.status(404).json({ success: false, message: "No seller profile found" });
+    const doc = await prisma.sellerDocument.findFirst({
+      where: { id: req.params.documentId, sellerProfileId: profile.id },
+      select: { id: true, fileUrl: true },
+    });
+    if (!doc) return res.status(404).json({ success: false, message: "Document not found" });
+    await prisma.sellerDocument.delete({ where: { id: doc.id } });
+    await deleteStoredFiles([doc.fileUrl]);
+    return res.json({ success: true, message: "Document deleted" });
+  } catch (error) {
+    next(error);
   }
 };

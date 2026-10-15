@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom';
 import { MessageCircleQuestion, User, Clock, ArrowRight } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters.js';
+import { useSellerArea } from '../../hooks/useSellerArea.js';
 
 const timeAgo = (date) => {
     const diffMs = Date.now() - new Date(date).getTime();
@@ -14,6 +15,7 @@ const timeAgo = (date) => {
 };
 
 export const PendingInquiriesPanel = ({ inquiries = [], isLoading }) => {
+    const area = useSellerArea();
     const navigate = useNavigate();
 
     return (
@@ -45,7 +47,7 @@ export const PendingInquiriesPanel = ({ inquiries = [], isLoading }) => {
                     inquiries.map((inq) => (
                         <button
                             key={inq.id}
-                            onClick={() => navigate('/seller/dashboard/purchase-requests')}
+                            onClick={() => navigate(area.to('purchase-requests'))}
                             className="flex w-full items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50 p-3 text-left transition hover:border-[#001f3f]/20 hover:bg-white sm:gap-3"
                         >
                             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#e6f2ff] text-[#001f3f] sm:h-9 sm:w-9">

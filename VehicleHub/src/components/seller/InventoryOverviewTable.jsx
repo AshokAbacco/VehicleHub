@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/components/seller/InventoryOverviewTable.jsx
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -13,6 +14,7 @@ import {
     useGetSellerInventoryQuery,
     useDeleteMyVehicleMutation,
 } from '../../services/sellerApiSlice.js';
+import { useSellerArea } from '../../hooks/useSellerArea.js';
 
 const sortOptions = [
     { value: 'date-desc', label: 'Newest first' },
@@ -105,6 +107,7 @@ const RowActionsMenu = ({ listing, onView, onEdit, onAnalytics, onDelete }) => {
 };
 
 export const InventoryOverviewTable = () => {
+    const area = useSellerArea();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
 
@@ -118,7 +121,7 @@ export const InventoryOverviewTable = () => {
     const initialStage = searchParams.get('stage');
     const [activeStage, setActiveStage] = useState(validStages.includes(initialStage) ? initialStage : 'all');
     const [statusFilter, setStatusFilter] = useState('all');
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = useState(searchParams.get('q') || '');
     const [sort, setSort] = useState('date-desc');
     const [currentPage, setCurrentPage] = useState(1);
 
@@ -126,6 +129,9 @@ export const InventoryOverviewTable = () => {
     useEffect(() => {
         const stageParam = searchParams.get('stage');
         if (validStages.includes(stageParam)) setActiveStage(stageParam);
+        // Navbar search -> <seller|dealer>/dashboard/inventory?q=...
+        const q = searchParams.get('q');
+        if (q !== null) setSearch(q);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams]);
 
@@ -179,7 +185,7 @@ export const InventoryOverviewTable = () => {
     const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
     const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-    const handleAddVehicle = () => navigate('/seller/dashboard/add-vehicle');
+    const handleAddVehicle = () => navigate(area.to('add-vehicle'));
     // const handleAnalytics = (l) => navigate(`/seller/dashboard/analytics?vehicle=${l.id}`);
 
     const handleView = (l) => setModalListing(l.raw);
