@@ -67,17 +67,18 @@ export const RegisterPage = () => {
 
     return (
         <AuthShell
-            title="Create your account"
-            subtitle="Browse, save vehicles and send purchase requests."
+            title="Create your buyer account"
+            subtitle="For customers who want to browse, save and buy vehicles on VehicleHub."
             footer={
                 <div className="mt-5 space-y-2 text-center text-sm text-slate-500">
                     <p>
                         Already have an account?{' '}
                         <Link to="/login" state={location.state} className="font-semibold text-[#001f3f] hover:underline">Sign in</Link>
                     </p>
-                    <p className="flex items-center justify-center gap-1.5">
-                        <Store size={14} className="text-slate-400" /> Want to sell?{' '}
-                        <Link to="/seller-Register" className="font-semibold text-[#001f3f] hover:underline">Register as a seller</Link>
+                    <p>
+                        <Store size={14} className="mr-1.5 inline text-slate-400" />
+                        Want to sell?{' '}
+                        <Link to="/seller-Register" className="font-semibold text-[#001f3f] hover:underline">Register as a seller or dealer</Link>
                     </p>
                 </div>
             }

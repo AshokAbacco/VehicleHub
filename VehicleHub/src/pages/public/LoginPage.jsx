@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { Link, Navigate, useLocation } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { ShieldCheck, Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, Store, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, Store, AlertCircle, ShoppingBag } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useAuthGate } from '../../context/AuthGateContext.jsx';
 import { useLoginMutation } from '../../services/authApiSlice.js';
@@ -106,12 +106,14 @@ export const LoginPage = () => {
             footer={
                 <div className="mt-5 space-y-2 text-center text-sm text-slate-500">
                     <p>
+                        <ShoppingBag size={14} className="mr-1.5 inline text-slate-400" />
                         New to VehicleHub?{' '}
-                        <Link to="/register" state={location.state} className="font-semibold text-[#001f3f] hover:underline">Create an account</Link>
+                        <Link to="/register" state={location.state} className="font-semibold text-[#001f3f] hover:underline">Create a Buyer account</Link>
                     </p>
-                    <p className="flex items-center justify-center gap-1.5">
-                        <Store size={14} className="text-slate-400" /> Want to sell?{' '}
-                        <Link to="/seller-Register" className="font-semibold text-[#001f3f] hover:underline">Register as a seller</Link>
+                    <p>
+                        <Store size={14} className="mr-1.5 inline text-slate-400" />
+                        Want to sell?{' '}
+                        <Link to="/seller-Register" className="font-semibold text-[#001f3f] hover:underline">Register as a seller or dealer</Link>
                     </p>
                 </div>
             }

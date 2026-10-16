@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/components/layout/FieldInspectorLayout.jsx
 import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { InspectorSidebar } from '../field-inspector/InspectorSidebar.jsx';
@@ -26,7 +27,8 @@ export const FieldInspectorLayout = () => {
     return (
         <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.12),_transparent_28%),linear-gradient(180deg,_#f8fafc_0%,_#eef4ff_100%)] text-slate-900">
             <InspectorSidebar mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)} />
-            <div className="lg:pl-[260px]">
+            {/* the sidebar is 76px wide when closed; it opens over the page on hover */}
+            <div className="lg:pl-[76px]">
                 <InspectorNavbar title={title} breadcrumb="Field Inspector" onOpenSidebar={() => setMobileOpen(true)} />
                 <main className="p-4 sm:p-6">
                     <Outlet />
