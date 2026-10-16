@@ -95,8 +95,6 @@ export const Navbar = () => {
         setProfileOpen(false);
     }, [location.pathname]);
 
-    if (hiddenPaths.includes(location.pathname)) return null;
-
     // SELL button: approved sellers -> seller dashboard; everyone else -> seller registration
     // (which shows "under review" / "rejected" when an application already exists)
     const redirectToSellerArea = (currentUser) => openSellerArea({ navigate, user: currentUser, completeAuth });
@@ -126,14 +124,14 @@ export const Navbar = () => {
         setProfileOpen((v) => !v);
     };
 
+    // SELL: signed in -> seller area (dashboard if approved, else the application);
+    // visitors go straight to the seller registration form (open to everyone)
     const handleSellClick = () => {
         if (isAuthenticated) {
             redirectToSellerArea(user);
             return;
         }
-        requireAuth((nextUser) => {
-            redirectToSellerArea(nextUser);
-        }, 'SELL');
+        navigate('/seller-Register');
     };
 
     // Place the city list right under the location button (viewport coordinates)
@@ -180,6 +178,10 @@ export const Navbar = () => {
             <AvatarImage src={user?.avatar} name={user?.name || user?.fullName} letterClassName={`font-bold text-[#001f3f] ${size.includes('12') ? 'text-lg' : 'text-sm'}`} />
         </div>
     );
+
+    // Hidden on the sign-in / sign-up pages. This must come after every hook above —
+    // returning earlier crashed the app ("Rendered fewer hooks") when navigating to /login.
+    if (hiddenPaths.includes(location.pathname)) return null;
 
     return (
         <header className="sticky top-0 z-50 w-full overflow-visible overflow-x-hidden border-b border-slate-400/70 bg-white/95 backdrop-blur-xl">
@@ -288,7 +290,7 @@ export const Navbar = () => {
                         </>
                     ) : (
                         <button
-                            onClick={() => requireAuth(() => { })}
+                            onClick={() => navigate('/login')}
                             className="cursor-pointer flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-slate-600 transition-all duration-150 hover:bg-slate-50 hover:text-slate-900 active:scale-95"
                         >
                             <User size={19} />
@@ -416,13 +418,9 @@ export const Navbar = () => {
                                     navigate(profilePathFor(role));
                                     return;
                                 }
-                                requireAuth((nextUser) => {
-                                    if (['seller', 'dealer'].includes(normalizeRole(nextUser?.role))) {
-                                        redirectToSellerArea(nextUser);
-                                    } else {
-                                        navigate(profilePathFor(nextUser?.role));
-                                    }
-                                });
+                                // Sign in -> their own dashboard
+                                setProfileOpen(false);
+                                navigate('/login');
                             }}
                             className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-slate-700 transition hover:bg-slate-50 active:scale-[0.98]"
                         >

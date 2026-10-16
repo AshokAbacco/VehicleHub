@@ -5,7 +5,7 @@ import { Helmet } from "react-helmet-async";
 import { toast } from 'react-hot-toast'; // the app renders react-hot-toast's <Toaster>
 import {
     ShieldCheck, Camera, FileText, Home, MapPin, Phone,
-    Building2, CreditCard, Landmark, CheckCircle2, User, Clock, XCircle, Loader2, Search,
+    Building2, CreditCard, Landmark, CheckCircle2, User, Clock, XCircle, Loader2, Search, Lock,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useAuthGate } from "../../context/AuthGateContext.jsx";
@@ -25,6 +25,8 @@ const initialFormData = {
     description: "",
     profilePhoto: null, shopLogo: null, panCardImage: null, gstCertificate: null,
     agreedToTerms: false,
+    // only for visitors without an account — creates their login with the application
+    password: "", confirmPassword: "",
 };
 
 const Field = ({ label, required, children }) => (
@@ -112,13 +114,17 @@ export const SellerRegistration = () => {
 
         e.preventDefault();
 
-        // The /sellers/register API requires a logged-in user (Bearer token).
-        // Without a token the server answers 401, so ask the user to log in first.
-        const existingToken = localStorage.getItem('vehiclehub_token');
-        if (!existingToken) {
-            toast.info('Please log in with your phone or email to continue seller registration.');
-            requireAuth(() => navigate('/seller-Register'), 'SELL');
-            return;
+        // Visitors without an account create their login with the application
+        const isGuest = !user;
+        if (isGuest) {
+            if ((formData.password || '').length < 8) {
+                toast.error('Choose a password of at least 8 characters for your account.');
+                return;
+            }
+            if (formData.password !== formData.confirmPassword) {
+                toast.error('The two passwords do not match.');
+                return;
+            }
         }
 
         const fullName = formData.ownerName?.trim() || formData.businessName?.trim() || user?.name || 'Seller';
@@ -145,6 +151,7 @@ export const SellerRegistration = () => {
             if (formData.bankIFSC) fd.append('bankIFSC', formData.bankIFSC);
             if (formData.bankName) fd.append('bankName', formData.bankName);
             if (formData.description) fd.append('description', formData.description);
+            if (isGuest) fd.append('password', formData.password);
 
             // Files
             if (formData.profilePhoto) fd.append('profilePhoto', formData.profilePhoto);
@@ -153,6 +160,10 @@ export const SellerRegistration = () => {
             if (formData.gstCertificate) fd.append('gstCertificate', formData.gstCertificate);
 
             const response = await registerSeller(fd).unwrap();
+            // New visitor: their account was created with the application — sign them in
+            if (isGuest && response?.accessToken && response?.user) {
+                completeAuth(response.user, response.accessToken);
+            }
 
             // Under review now — the seller dashboard opens once an admin approves
             setApplication({
@@ -196,7 +207,7 @@ export const SellerRegistration = () => {
                             Register as a seller and start listing premium vehicles.
                         </h1>
                         <p className="max-w-2xl text-sm leading-7 text-slate-500 sm:text-base">
-                            Your application is reviewed by our admin team, typically within 24 hours. Once verified, you can list unlimited vehicles.
+                            Your application is reviewed by our admin team, typically within 24 hours. Once verified, Sellers list one vehicle at a time and Dealers can list as many as they like.
                         </p>
                         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
                             {[
@@ -300,6 +311,20 @@ export const SellerRegistration = () => {
                                     <Field label="Website (optional)"><TextInput type="text" name="website" value={formData.website} onChange={handleChange} placeholder="https://" /></Field>
                                 </div>
                             </div>
+
+                            {/* Visitors without an account: create the login with this application */}
+                            {!user && (
+                                <div>
+                                    <SectionHeader icon={Lock} title="Create Your Login" subtitle="Sign in later with your email or mobile number and this password" />
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <Field label="Password" required><TextInput type="password" name="password" value={formData.password} onChange={handleChange} required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" /></Field>
+                                        <Field label="Confirm password" required><TextInput type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required minLength={8} autoComplete="new-password" /></Field>
+                                    </div>
+                                    <p className="mt-2 text-xs text-slate-500">
+                                        Already have an account? <Link to="/login" state={{ from: '/seller-Register' }} className="font-semibold text-[#001f3f] hover:underline">Sign in</Link> first, then apply.
+                                    </p>
+                                </div>
+                            )}
 
                             {/* Location */}
                             <div>

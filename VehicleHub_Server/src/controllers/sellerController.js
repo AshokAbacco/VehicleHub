@@ -2,7 +2,8 @@
 // ============================================================
 // SELLER REGISTRATION + SELLER PROFILE — mounted in routes/sellerRoutes.js
 //
-// Flow: a logged-in BUYER submits POST /api/sellers/register -> SellerProfile PENDING.
+// Flow: a BUYER (or a visitor, who also sends a password and gets a BUYER account) submits
+//       POST /api/sellers/register -> SellerProfile PENDING.
 //       They stay a BUYER until an admin approves them (routes/adminRoutes.js ->
 //       PATCH /api/admin/sellers/:id/approve), which switches the role to SELLER.
 //       A rejected applicant can correct the form and submit again.
@@ -11,6 +12,8 @@ import { z } from "zod";
 import { prisma } from "../config/db.js";
 import { storeUpload, deleteStoredFiles } from "../utils/storeUpload.js";
 import { normalizePhone } from "../utils/phone.js";
+import bcrypt from "bcryptjs";
+import { generateAccessToken } from "../utils/generateToken.js";
 import { SELLING_ROLES, roleForSellerType, listingAllowance, accountTypeLabel } from "../utils/sellerAccount.js";
 
 // ============================================================
@@ -60,11 +63,11 @@ const notifyAdmins = async (tx, data) => {
 // ============================================================
 export const registerSeller = async (req, res) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ message: "Authentication required before registering as a seller." });
-    }
-    if (req.user.role !== "BUYER" && !SELLING_ROLES.includes(req.user.role)) {
+    // Anyone can apply. A visitor without an account also sends a password: the account (BUYER)
+    // and the application are created together, and they are signed in.
+    let userId = req.user?.id;
+    const isGuest = !userId;
+    if (!isGuest && req.user.role !== "BUYER" && !SELLING_ROLES.includes(req.user.role)) {
       return res.status(403).json({ message: "Admin and field inspector accounts can't register as sellers." });
     }
 
@@ -77,8 +80,29 @@ export const registerSeller = async (req, res) => {
     }
     const data = parsed.data;
 
+    let newAccount = null;
+    if (isGuest) {
+      const password = String(req.body?.password || "");
+      if (password.length < 8) {
+        return res.status(400).json({ message: "Please check the highlighted fields.", errors: { password: ["Password must be at least 8 characters"] } });
+      }
+      const email = String(data.email).trim().toLowerCase();
+      const phone = normalizePhone(data.phone);
+      const [emailTaken, phoneTaken] = await Promise.all([
+        prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true } }),
+        phone ? prisma.user.findFirst({ where: { phone }, select: { id: true } }) : null,
+      ]);
+      if (emailTaken || phoneTaken) {
+        return res.status(409).json({
+          message: `An account with this ${emailTaken ? "email" : "mobile number"} already exists. Please sign in first, then apply.`,
+          errors: emailTaken ? { email: ["Already registered — sign in first"] } : { phone: ["Already registered — sign in first"] },
+        });
+      }
+      newAccount = { email, phone: phone || null, password: await bcrypt.hash(password, 10) };
+    }
+
     // One application per account. A rejected applicant may resubmit.
-    const existing = await prisma.sellerProfile.findUnique({ where: { userId } });
+    const existing = isGuest ? null : await prisma.sellerProfile.findUnique({ where: { userId } });
     if (existing && existing.verificationStatus !== "REJECTED") {
       return res.status(409).json({
         message:
@@ -123,7 +147,14 @@ export const registerSeller = async (req, res) => {
       reviewedBy: null,
     };
 
+    let createdUser = null;
     const result = await prisma.$transaction(async (tx) => {
+      if (newAccount) {
+        createdUser = await tx.user.create({
+          data: { ...newAccount, role: "BUYER", fullName: data.ownerName, isActive: true },
+        });
+        userId = createdUser.id;
+      }
       const profile = existing
         ? await tx.sellerProfile.update({ where: { id: existing.id }, data: profileData })
         : await tx.sellerProfile.create({ data: { userId, ...profileData } });
@@ -184,11 +215,15 @@ export const registerSeller = async (req, res) => {
         id: result.id,
         verificationStatus: result.verificationStatus,
       },
+      // New visitors are signed in straight away (as a buyer until approved)
+      ...(createdUser
+        ? { accessToken: generateAccessToken(createdUser), user: (({ password, ...u }) => u)(createdUser) }
+        : {}),
     });
   } catch (error) {
     console.error("registerSeller error:", error);
-    return res.status(500).json({
-      message: "Something went wrong while submitting your registration.",
+    return res.status(error.statusCode || 500).json({
+      message: error.statusCode ? error.message : "Something went wrong while submitting your registration.",
     });
   }
 };

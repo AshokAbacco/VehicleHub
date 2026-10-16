@@ -1,275 +1,177 @@
-// VehicleHub/VehicleHub/src/services/sellerApiSlice.js
-import { apiSlice } from "./apiSlice.js";
+// VehicleHub/VehicleHub/src/services/adminApiSlice.js
+// Admin panel API (server: VehicleHub_Server/src/routes/adminRoutes.js, ADMIN role only).
+// Every admin page reads real database data through these endpoints.
+import { apiSlice } from './apiSlice.js';
 
-export const sellerApi = apiSlice.injectEndpoints({
+// Anything an admin changes refreshes all admin screens (counts, badges, lists)
+const ADMIN = ['AdminData'];
+
+export const adminApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
-    getSellerDashboard: builder.query({
-      query: () => "/dashboard/seller",
-      providesTags: ["Dashboard"],
+    // ---------------- Dashboard ----------------
+    getAdminDashboard: builder.query({
+      query: () => '/admin/dashboard',
+      providesTags: ADMIN,
     }),
 
-    createVehicle: builder.mutation({
-      query: (payload) => ({
-        url: "/vehicles",
-        method: "POST",
-        body: payload,
-      }),
-      invalidatesTags: ["Vehicle"],
+    // ---------------- Vehicles ----------------
+    getAdminVehicles: builder.query({
+      query: (search) => (search ? `/admin/vehicles?search=${encodeURIComponent(search)}` : '/admin/vehicles'),
+      providesTags: [...ADMIN, 'Vehicle'],
     }),
-    updateVehicle: builder.mutation({
-      query: ({ id, formData, ...payload }) => ({
-        url: `/vehicles/${id}`,
-        method: "PUT",
-        body: formData || payload,
-      }),
-      invalidatesTags: ["Vehicle"],
+    deleteAdminVehicle: builder.mutation({
+      query: (id) => ({ url: `/admin/vehicles/${id}`, method: 'DELETE' }),
+      invalidatesTags: [...ADMIN, 'Vehicle'],
     }),
-    deleteVehicleImage: builder.mutation({
-      query: ({ id, imageUrl }) => ({
-        url: `/vehicles/${id}/images`,
-        method: "DELETE",
-        body: { imageUrl },
-      }),
-      invalidatesTags: ["Vehicle"],
+    // Admin "Add Vehicle" uses the same endpoint as sellers (admins' listings go live directly)
+    createAdminVehicle: builder.mutation({
+      query: (formData) => ({ url: '/vehicles', method: 'POST', body: formData }),
+      invalidatesTags: [...ADMIN, 'Vehicle'],
     }),
-    // Own orders + buyer payments: { data: { orders, payments, totals } }
-    getSellerOrders: builder.query({
-      query: () => "/sellers/me/sales",
-      providesTags: ["Order"],
-    }),
-
-    registerSeller: builder.mutation({
-      query: (payload) => ({
-        url: "/sellers/register",
-        method: "POST",
-        body: payload,
-      }),
-    }),
-    // { role, status, isApproved, accountType: "Seller"|"Dealer", listingAllowance: { limit, open, remaining, canAdd } }
-    getMySellerStatus: builder.query({
-      query: () => "/sellers/me/status",
-      providesTags: ["SellerStatus", "Vehicle"],
-    }),
-    getSellerStatus: builder.query({
-      query: (sellerId) => `/sellers/${sellerId}/seller-status`,
-      providesTags: ["SellerStatus"],
-    }),
-    // getSellerInventory: builder.query({
-    //   query: (sellerId) => `/sellers/${sellerId}/vehicles`,
-    //   providesTags: ["Vehicle"],
-    // }),
-    getSellerInventory: builder.query({
-      query: (arg) => {
-        const value = typeof arg === "string" ? arg : arg?.status;
-        const status =
-          value &&
-          [
-            "draft",
-            "pending",
-            "under_verification",
-            "approved",
-            "rejected",
-            "sold",
-            "archived",
-          ].includes(String(value).toLowerCase())
-            ? String(value).toLowerCase()
-            : undefined;
-
-        return status
-          ? `/vehicles/my/listings?status=${status}`
-          : "/vehicles/my/listings";
-      },
-      providesTags: ["Vehicle"],
-    }),
-
-    deleteMyVehicle: builder.mutation({
-      query: (id) => ({
-        url: `/vehicles/my/listings/${id}`,
-        method: "DELETE",
-      }),
-      invalidatesTags: ["Vehicle"],
+    getPendingVehicles: builder.query({
+      query: () => '/vehicles/admin/pending',
+      providesTags: [...ADMIN, 'Vehicle'],
     }),
     approveVehicle: builder.mutation({
-      query: (id) => ({
-        url: `/vehicles/${id}/approve`,
-        method: "PATCH",
-      }),
-      invalidatesTags: ["Vehicle"],
+      query: (id) => ({ url: `/vehicles/${id}/approve`, method: 'PATCH' }),
+      invalidatesTags: [...ADMIN, 'Vehicle', 'Dashboard'],
     }),
     rejectVehicle: builder.mutation({
-      query: (id) => ({
-        url: `/vehicles/${id}/reject`,
-        method: "PATCH",
-      }),
-      invalidatesTags: ["Vehicle"],
+      query: ({ id, reason }) => ({ url: `/vehicles/${id}/reject`, method: 'PATCH', body: { reason } }),
+      invalidatesTags: [...ADMIN, 'Vehicle', 'Dashboard'],
     }),
-    markVehicleSold: builder.mutation({
-      query: (id) => ({
-        url: `/vehicles/${id}/sold`,
-        method: "PATCH",
-      }),
-      invalidatesTags: ["Vehicle"],
+
+    // ---------------- Sellers (applications + approved sellers) ----------------
+    // status: APPROVED (default) | PENDING | REJECTED | ALL
+    getAdminSellers: builder.query({
+      query: ({ status = 'APPROVED', search = '' } = {}) =>
+        `/admin/sellers?status=${status}${search ? `&search=${encodeURIComponent(search)}` : ''}`,
+      providesTags: ADMIN,
     }),
-    getSellerStats: builder.query({
-      query: () => "/sellers/me/stats",
-      providesTags: ["Vehicle"],
+    getPendingSellers: builder.query({
+      query: () => '/admin/sellers/pending',
+      providesTags: ADMIN,
     }),
-    getSalesPerformance: builder.query({
-      query: () => "/sellers/me/sales-performance",
-      providesTags: ["Vehicle"],
+    getPendingSellerCount: builder.query({
+      query: () => '/admin/sellers/notifications-count',
+      providesTags: ADMIN,
     }),
-    getSellerInquiries: builder.query({
-      query: () => "/sellers/me/inquiries",
-      providesTags: ["Vehicle"],
+    getSellerRegistrationDetail: builder.query({
+      query: (id) => `/admin/sellers/${id}`,
+      providesTags: ADMIN,
     }),
-    getSellerInspections: builder.query({
-      query: () => "/sellers/inspection-requests",
-      providesTags: ["Inspection"],
+    approveSeller: builder.mutation({
+      query: (id) => ({ url: `/admin/sellers/${id}/approve`, method: 'PATCH' }),
+      invalidatesTags: ADMIN,
     }),
-    getSellerInspectionById: builder.query({
-      query: (id) => `/sellers/inspection-requests/${id}`,
-      providesTags: ["Inspection"],
+    rejectSeller: builder.mutation({
+      query: ({ id, reason }) => ({ url: `/admin/sellers/${id}/reject`, method: 'PATCH', body: { reason } }),
+      invalidatesTags: ADMIN,
     }),
-    // Notification
-    getSellerNotifications: builder.query({
-      query: () => "/sellers/seller-notifications",
-      providesTags: ["SellerNotification"],
+
+    // ---------------- Buyers ----------------
+    getAdminBuyers: builder.query({
+      query: () => '/admin/buyers',
+      providesTags: [...ADMIN, 'AdminBuyers'],
     }),
-    markSellerNotificationRead: builder.mutation({
-      query: (id) => ({
-        url: `/sellers/seller-notifications/${id}/read`,
-        method: "PATCH",
-      }),
-      invalidatesTags: ["SellerNotification"],
+    deleteAdminBuyer: builder.mutation({
+      query: (id) => ({ url: `/admin/buyers/${id}`, method: 'DELETE' }),
+      invalidatesTags: [...ADMIN, 'AdminBuyers'],
     }),
-    markAllSellerNotificationsRead: builder.mutation({
-      query: () => ({
-        url: "/sellers/seller-notifications/read-all",
-        method: "PATCH",
-      }),
-      invalidatesTags: ["SellerNotification"],
+
+    // ---------------- Carts, revenue, orders & sales ----------------
+    getAdminCarts: builder.query({
+      query: () => '/admin/carts',
+      providesTags: ADMIN,
     }),
-    deleteSellerNotification: builder.mutation({
-      query: (id) => ({
-        url: `/sellers/seller-notifications/${id}`,
-        method: "DELETE",
-      }),
-      invalidatesTags: ["SellerNotification"],
+    getAdminRevenue: builder.query({
+      query: () => '/admin/revenue',
+      providesTags: ADMIN,
     }),
-    // =====================Seller Profile=========================
-    getMyProfile: builder.query({
-      query: () => "/sellers/me/profile",
-      providesTags: ["SellerProfile"],
+    getAdminOrders: builder.query({
+      query: () => '/admin/orders',
+      providesTags: ADMIN,
     }),
-    updateMyProfile: builder.mutation({
-      query: (formData) => ({
-        url: "/sellers/me/profile",
-        method: "PATCH",
-        body: formData,
-      }),
-      invalidatesTags: ["SellerProfile"],
+
+    // ---------------- Admin's own notifications ----------------
+    getAdminNotifications: builder.query({
+      query: () => '/admin/notifications',
+      providesTags: ADMIN,
     }),
-    uploadMyDocuments: builder.mutation({
-      query: (formData) => ({
-        url: "/sellers/me/documents",
-        method: "POST",
-        body: formData,
-      }),
-      invalidatesTags: ["SellerProfile"],
+    markAdminNotificationRead: builder.mutation({
+      query: (id) => ({ url: `/admin/notifications/${id}/read`, method: 'PATCH' }),
+      invalidatesTags: ADMIN,
     }),
-    deleteMyDocument: builder.mutation({
-      query: (documentId) => ({
-        url: `/sellers/me/documents/${documentId}`,
-        method: "DELETE",
-      }),
-      invalidatesTags: ["SellerProfile"],
+    markAllAdminNotificationsRead: builder.mutation({
+      query: () => ({ url: '/admin/notifications/read-all', method: 'PATCH' }),
+      invalidatesTags: ADMIN,
     }),
-    //======================== Purchase Requests==================================
-    getPurchaseRequests: builder.query({
-      query: () => "/sellers/purchase-requests",
-      providesTags: ["PurchaseRequest"],
+
+    // ---------------- Messages ----------------
+    getAdminConversations: builder.query({
+      query: () => '/admin/conversations',
+      providesTags: ADMIN,
     }),
-    getPurchaseRequestById: builder.query({
-      query: (id) => `/sellers/purchase-requests/${id}`,
+    sendAdminMessage: builder.mutation({
+      query: ({ conversationId, text }) => ({ url: `/admin/conversations/${conversationId}/messages`, method: 'POST', body: { text } }),
+      invalidatesTags: ADMIN,
     }),
-    acceptPurchaseRequest: builder.mutation({
-      query: (id) => ({
-        url: `/sellers/purchase-requests/${id}/accept`,
-        method: "PATCH",
-      }),
-      invalidatesTags: ["PurchaseRequest", "Vehicle"],
+    markAdminConversationRead: builder.mutation({
+      query: (conversationId) => ({ url: `/admin/conversations/${conversationId}/read`, method: 'PATCH' }),
+      invalidatesTags: ADMIN,
     }),
-    rejectPurchaseRequest: builder.mutation({
-      query: ({ id, reason }) => ({
-        url: `/sellers/purchase-requests/${id}/reject`,
-        method: "PATCH",
-        body: { reason },
-      }),
-      invalidatesTags: ["PurchaseRequest"],
+
+    // ---------------- Field inspections ----------------
+    getInspectors: builder.query({
+      query: () => '/admin/inspectors',
+      providesTags: ADMIN,
     }),
-    //======================== Messages (the signed-in user's own conversations) ==================
-    getMyConversations: builder.query({
-      query: () => "/conversations",
-      providesTags: ["Conversation"],
+    getAdminInspections: builder.query({
+      query: (vehicleId) => (vehicleId ? `/admin/inspections?vehicleId=${vehicleId}` : '/admin/inspections'),
+      providesTags: ADMIN,
     }),
-    sendConversationMessage: builder.mutation({
-      query: ({ conversationId, text }) => ({
-        url: `/conversations/${conversationId}/messages`,
-        method: "POST",
-        body: { text },
-      }),
-      invalidatesTags: ["Conversation"],
-    }),
-    markConversationRead: builder.mutation({
-      query: (conversationId) => ({
-        url: `/conversations/${conversationId}/read`,
-        method: "PATCH",
-      }),
-      invalidatesTags: ["Conversation"],
+    // body: { vehicleId, inspectorId, scheduledAt, priority, deadline }
+    assignInspection: builder.mutation({
+      query: (body) => ({ url: '/admin/inspections', method: 'POST', body }),
+      invalidatesTags: ADMIN,
     }),
   }),
   overrideExisting: false,
 });
 
 export const {
-  useGetSellerDashboardQuery,
-  useCreateVehicleMutation,
-  useUpdateVehicleMutation,
-  useDeleteVehicleImageMutation,
-  useGetSellerOrdersQuery,
-  useRegisterSellerMutation,
-  useGetSellerStatusQuery,
-  useGetMySellerStatusQuery,
+  useGetAdminDashboardQuery,
 
-  useGetSellerInventoryQuery,
-  useDeleteMyVehicleMutation,
-
+  useGetAdminVehiclesQuery,
+  useDeleteAdminVehicleMutation,
+  useCreateAdminVehicleMutation,
+  useGetPendingVehiclesQuery,
   useApproveVehicleMutation,
   useRejectVehicleMutation,
-  useMarkVehicleSoldMutation,
-  useGetSellerStatsQuery,
-  useGetSalesPerformanceQuery,
-  useGetSellerInquiriesQuery,
-  useGetSellerInspectionsQuery,
-  useGetSellerInspectionByIdQuery,
 
-  // Notification
-  useGetSellerNotificationsQuery,
-  useMarkSellerNotificationReadMutation,
-  useMarkAllSellerNotificationsReadMutation,
-  useDeleteSellerNotificationMutation,
-  // =====================Seller Profile=========================
-  useGetMyProfileQuery,
-  useUpdateMyProfileMutation,
-  useUploadMyDocumentsMutation,
-  useDeleteMyDocumentMutation,
-  //======================== Purchase Requests==================================
-  useGetPurchaseRequestsQuery,
-  useGetPurchaseRequestByIdQuery,
-  useAcceptPurchaseRequestMutation,
-  useRejectPurchaseRequestMutation,
-  // Messages
-  useGetMyConversationsQuery,
-  useSendConversationMessageMutation,
-  useMarkConversationReadMutation,
-} = sellerApi;
+  useGetAdminSellersQuery,
+  useGetPendingSellersQuery,
+  useGetPendingSellerCountQuery,
+  useGetSellerRegistrationDetailQuery,
+  useApproveSellerMutation,
+  useRejectSellerMutation,
+
+  useGetAdminBuyersQuery,
+  useDeleteAdminBuyerMutation,
+
+  useGetAdminCartsQuery,
+  useGetAdminRevenueQuery,
+  useGetAdminOrdersQuery,
+
+  useGetAdminNotificationsQuery,
+  useMarkAdminNotificationReadMutation,
+  useMarkAllAdminNotificationsReadMutation,
+
+  useGetAdminConversationsQuery,
+  useSendAdminMessageMutation,
+  useMarkAdminConversationReadMutation,
+
+  useGetInspectorsQuery,
+  useGetAdminInspectionsQuery,
+  useAssignInspectionMutation,
+} = adminApi;

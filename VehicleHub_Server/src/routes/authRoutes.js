@@ -1,16 +1,23 @@
+// VehicleHub/VehicleHub_Server/src/routes/authRoutes.js
+// Mounted at /api/auth. Sign-in is email / mobile number + password (OTP sign-in removed).
 import express from "express";
+import rateLimit from "express-rate-limit";
 import * as authController from "../controllers/authController.js";
 import { authenticateUser } from "../middleware/authMiddleware.js";
 
-import {
-  sendEmailOTP,
-  verifyEmailOTP,
-} from "../controllers/authController.js";
-
 const router = express.Router();
 
-router.post("/register", authController.register);
-router.post("/login", authController.login);
+// Slow down password guessing: 20 sign-in / sign-up attempts per 15 minutes per IP
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Too many attempts. Please wait a few minutes and try again." },
+});
+
+router.post("/register", authLimiter, authController.register);
+router.post("/login", authLimiter, authController.login);
 
 router.post("/logout", authController.logout);
 router.post("/refresh-token", authController.refreshToken);
@@ -23,12 +30,5 @@ router.post(
   authController.changePassword,
 );
 router.get("/me", authenticateUser, authController.getCurrentUser);
-
-// Email OTP endpoints
-router.get("/send-otp", (req, res) => res.status(405).json({ success: false, message: "Use POST /api/auth/send-otp" }));
-router.post("/send-otp", sendEmailOTP);
-
-router.get("/verify-otp", (req, res) => res.status(405).json({ success: false, message: "Use POST /api/auth/verify-otp" }));
-router.post("/verify-otp", verifyEmailOTP);
 
 export default router;

@@ -1,7 +1,6 @@
 // VehicleHub/VehicleHub_Server/src/routes/index.js
 import express from "express";
 import authRoutes from "./authRoutes.js";
-import OTPRoute from "./OTPRoute.js";
 import userRoutes from "./userRoutes.js";
 import vehicleRoutes from "./vehicleRoutes.js";
 import brandRoutes from "./brandRoutes.js";
@@ -18,11 +17,12 @@ import reportRoutes from "./reportRoutes.js";
 import uploadRoutes from "./uploadRoutes.js";
 import buyerRoutes from "./buyerRoutes.js";
 import adminRoutes from "./adminRoutes.js";
+import fieldInspectorRoutes from "./fieldInspectorRoutes.js";
+import conversationRoutes from "./conversationRoutes.js";
 
 const router = express.Router();
 
 router.use("/auth", authRoutes);
-router.use("/auth", OTPRoute);
 router.use("/users", userRoutes);
 router.use("/vehicles", vehicleRoutes);
 router.use("/brands", brandRoutes);
@@ -38,6 +38,8 @@ router.use("/subscriptions", subscriptionRoutes);
 router.use("/reports", reportRoutes);
 router.use("/uploads", uploadRoutes);
 router.use("/buyer", buyerRoutes); // buyer panel + purchase requests
-router.use("/admin", adminRoutes); // admin panel (buyers, …)
+router.use("/admin", adminRoutes); // admin panel
+router.use("/field-inspector", fieldInspectorRoutes); // field inspector panel
+router.use("/conversations", conversationRoutes); // the signed-in user's own chats
 
 export default router;

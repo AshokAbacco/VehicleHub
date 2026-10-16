@@ -10,7 +10,8 @@
     "prisma:migrate": "prisma migrate dev --name init",
     "test": "echo \"No tests specified\"",
     "seed": "node prisma/seed.js",
-    "fix-roles": "node prisma/fix-roles.js"
+    "fix-roles": "node prisma/fix-roles.js",
+    "set-password": "node prisma/set-password.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

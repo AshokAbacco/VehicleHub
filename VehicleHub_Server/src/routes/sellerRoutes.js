@@ -1,8 +1,9 @@
 // VehicleHub/VehicleHub_Server/src/routes/sellerRoutes.js
 // Mounted at /api/sellers.
-//  - /register and /me/status: any logged-in user (a buyer applying to sell)
+//  - /register: anyone (visitors create an account with it); /me/status: any logged-in user
 //  - everything else: APPROVED sellers only (admins also allowed where noted)
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import {
   registerSeller,
   getSellerDashboard,
@@ -38,13 +39,17 @@ import { requireApprovedSeller } from "../middleware/sellerAccess.js";
 import { uploadFields } from "../middleware/uploadMiddleware.js";
 
 const router = Router();
+const applyLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
 const loggedIn = [authenticateUser, requireAuth];
 const seller = [authenticateUser, requireAuth, authorizeRoles("SELLER", "DEALER", "ADMIN"), requireApprovedSeller];
 
 // ---- Seller application (buyer -> seller) ----
+// Open to everyone: signed-in buyers apply with their account; visitors also send a password
+// and get an account created with the application.
 router.post(
   "/register",
-  ...loggedIn,
+  applyLimiter,
+  authenticateUser,
   uploadFields([
     { name: "profilePhoto", maxCount: 1 },
     { name: "shopLogo", maxCount: 1 },

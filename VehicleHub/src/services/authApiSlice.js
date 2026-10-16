@@ -1,7 +1,10 @@
+// VehicleHub/VehicleHub/src/services/authApiSlice.js
+// Sign-in is email / mobile number + password (OTP sign-in has been removed).
 import { apiSlice } from "./apiSlice.js";
 
 export const authApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
+    // { identifier: email or mobile number, password } -> { data: { user, accessToken } }
     login: builder.mutation({
       query: (credentials) => ({
         url: "/auth/login",
@@ -19,6 +22,7 @@ export const authApi = apiSlice.injectEndpoints({
       query: () => "/auth/me",
       providesTags: ["User"],
     }),
+    // { fullName, email, phone, password } -> new BUYER account { data: { user, accessToken } }
     register: builder.mutation({
       query: (payload) => ({
         url: "/auth/register",
@@ -26,46 +30,9 @@ export const authApi = apiSlice.injectEndpoints({
         body: payload,
       }),
     }),
-    sendOTP: builder.mutation({
+    changePassword: builder.mutation({
       query: (payload) => ({
-        url: "/auth/phone/send-otp",
-        method: "POST",
-        body: payload,
-      }),
-    }),
-    verifyOTP: builder.mutation({
-      query: (payload) => ({
-        url: "/auth/phone/verify-otp",
-        method: "POST",
-        body: payload,
-      }),
-    }),
-
-    // Email OTP endpoints
-    sendEmailOtp: builder.mutation({
-      query: (payload) => ({
-        url: "/auth/send-otp",
-        method: "POST",
-        body: payload,
-      }),
-    }),
-    verifyEmailOtp: builder.mutation({
-      query: (payload) => ({
-        url: "/auth/verify-otp",
-        method: "POST",
-        body: payload,
-      }),
-    }),
-    completeProfile: builder.mutation({
-      query: (payload) => ({
-        url: "/auth/complete-profile",
-        method: "POST",
-        body: payload,
-      }),
-    }),
-    checkUserRole: builder.mutation({
-      query: (payload) => ({
-        url: "/users/check-role",
+        url: "/auth/change-password",
         method: "POST",
         body: payload,
       }),
@@ -79,13 +46,5 @@ export const {
   useLogoutMutation,
   useGetCurrentUserQuery,
   useRegisterMutation,
-  useSendOTPMutation,
-  useVerifyOTPMutation,
-
-  // Email OTP hooks
-  useSendEmailOtpMutation,
-  useVerifyEmailOtpMutation,
-  useCompleteProfileMutation,
-  // User role check hook
-  useCheckUserRoleMutation,
+  useChangePasswordMutation,
 } = authApi;

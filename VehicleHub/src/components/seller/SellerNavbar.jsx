@@ -1,16 +1,15 @@
 // VehicleHub/VehicleHub/src/components/seller/SellerNavbar.jsx
 // Seller top bar. Only approved sellers reach this layout (ProtectedRoute + backend requireApprovedSeller),
 // so Add Vehicle / My profile link straight to the dashboard pages.
-// Badges: unread seller notifications + unread messages, both from the server.
+// Layout: search on the left; Add Vehicle, notifications bell and profile on the right.
+// Bell badge = unread seller notifications from the server.
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import {
-    Bell, ChevronDown, Menu, MessageCircle, Search, SunMoon,
-    Plus, UserCircle,
+    Bell, ChevronDown, Menu, Search, Plus, UserCircle,
 } from 'lucide-react';
-import { SellerMessagesModal } from '../seller/SellerMessagesModal.jsx';
-import { useGetSellerNotificationsQuery, useGetMyConversationsQuery } from '../../services/sellerApiSlice.js';
+import { useGetSellerNotificationsQuery } from '../../services/sellerApiSlice.js';
 import { useSellerArea } from '../../hooks/useSellerArea.js';
 
 export const SellerNavbar = ({ onOpenSidebar }) => {
@@ -19,17 +18,13 @@ export const SellerNavbar = ({ onOpenSidebar }) => {
     const area = useSellerArea();
 
     const [dropdownOpen, setDropdownOpen] = useState(false);
-    const [messagesOpen, setMessagesOpen] = useState(false);
-    const [, setDarkMode] = useState(false);
     const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
     const [searchValue, setSearchValue] = useState('');
 
     const dropdownRef = useRef(null);
     const dropdownBtnRef = useRef(null);
     const { data: notificationData } = useGetSellerNotificationsQuery(undefined, { pollingInterval: 15000 });
-    const { data: conversationData } = useGetMyConversationsQuery(undefined, { pollingInterval: 30000 });
     const unreadNotificationsCount = notificationData?.data?.unreadCount ?? 0;
-    const unreadMessages = conversationData?.data?.unreadCount ?? 0;
 
     const goTo = (path) => navigate(path);
 
@@ -54,7 +49,7 @@ export const SellerNavbar = ({ onOpenSidebar }) => {
     return (
         <>
             <header className="fixed inset-x-0 top-0 z-30 w-full border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl transition-all duration-200 lg:pl-[76px]">
-                <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3 lg:px-8">
+                <div className="flex w-full items-center justify-between gap-2 px-3 py-2.5 sm:gap-4 sm:px-4 sm:py-3 lg:px-6">
                     {/* Left: menu + search */}
                     <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                         <button
@@ -65,7 +60,7 @@ export const SellerNavbar = ({ onOpenSidebar }) => {
                             <Menu size={19} />
                         </button>
 
-                        <div className="hidden min-w-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-slate-600 transition focus-within:border-[#001f3f]/30 focus-within:bg-white focus-within:shadow-sm sm:flex">
+                        <div className="hidden w-full max-w-md min-w-0 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-slate-600 transition focus-within:border-[#001f3f]/30 focus-within:bg-white focus-within:shadow-sm sm:flex">
                             <Search size={17} className="shrink-0 text-slate-400" />
                             <input
                                 type="text"
@@ -77,7 +72,7 @@ export const SellerNavbar = ({ onOpenSidebar }) => {
                                     }
                                 }}
                                 placeholder="Search inventory, leads, orders..."
-                                className="w-full min-w-[160px] bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none lg:min-w-[220px]"
+                                className="w-full min-w-0 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
                             />
                         </div>
 
@@ -93,6 +88,13 @@ export const SellerNavbar = ({ onOpenSidebar }) => {
                     {/* Right: actions */}
                     <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
                         <button
+                            onClick={() => goTo(area.to('add-vehicle'))}
+                            className="hidden items-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-r from-[#001f3f] to-[#003366] px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-[#001f3f]/25 transition hover:-translate-y-0.5 hover:shadow-lg sm:inline-flex sm:gap-2 sm:px-4 sm:text-sm"
+                        >
+                            <Plus size={15} /> <span className="hidden sm:inline">Add Vehicle</span>
+                        </button>
+
+                        <button
                             onClick={() => navigate(area.to('notifications'))}
                             className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition hover:border-[#001f3f]/30 hover:bg-slate-50 sm:h-11 sm:w-11"
                             aria-label="Notifications"
@@ -104,34 +106,6 @@ export const SellerNavbar = ({ onOpenSidebar }) => {
                                     {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
                                 </span>
                             )}
-                        </button>
-
-                        <button
-                            onClick={() => setMessagesOpen(true)}
-                            className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition hover:border-[#001f3f]/30 hover:bg-slate-50 sm:h-11 sm:w-11"
-                            aria-label="Messages"
-                        >
-                            <MessageCircle size={18} />
-                            {unreadMessages > 0 && (
-                                <span className="absolute -top-1 -right-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#001f3f] text-[10px] font-bold text-white ring-2 ring-white">
-                                    {unreadMessages}
-                                </span>
-                            )}
-                        </button>
-
-                        <button
-                            onClick={() => setDarkMode((v) => !v)}
-                            className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition hover:border-[#001f3f]/30 hover:bg-slate-50 md:inline-flex sm:h-11 sm:w-11"
-                            aria-label="Toggle theme"
-                        >
-                            <SunMoon size={18} />
-                        </button>
-
-                        <button
-                            onClick={() => goTo(area.to('add-vehicle'))}
-                            className="hidden items-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-r from-[#001f3f] to-[#003366] px-3 py-2.5 text-xs font-bold text-white shadow-md shadow-[#001f3f]/25 transition hover:-translate-y-0.5 hover:shadow-lg sm:inline-flex sm:gap-2 sm:px-4 sm:text-sm"
-                        >
-                            <Plus size={15} /> <span className="hidden sm:inline">Add Vehicle</span>
                         </button>
 
                         {/* Profile dropdown */}
@@ -202,10 +176,6 @@ export const SellerNavbar = ({ onOpenSidebar }) => {
                     </button>
                 </div>
             </header>
-
-            {messagesOpen && (
-                <SellerMessagesModal onClose={() => setMessagesOpen(false)} />
-            )}
         </>
     );
 };

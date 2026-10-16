@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/components/auth/AuthModal.jsx
 import { useState, useRef, useEffect } from 'react';
 import { X, ChevronLeft, Phone, ShieldCheck, User, Smartphone, Mail } from 'lucide-react';
 import {
@@ -6,11 +7,14 @@ import {
     useSendEmailOtpMutation,
     useVerifyEmailOtpMutation,
     useCompleteProfileMutation,
-    useCheckUserRoleMutation,
 } from '../../services/authApiSlice.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 
 const STEP = { INTRO: 'intro', PHONE: 'phone', OTP: 'otp', EMAIL: 'email', EMAIL_OTP: 'email_otp', NAME: 'name' };
+
+// The login token, wherever the server put it in the OTP reply
+const tokenFrom = (response) =>
+    response?.accessToken || response?.token || response?.data?.accessToken || response?.data?.token || '';
 
 export const AuthModal = ({ onClose, onComplete, intent = null }) => {
     const { completeAuth, user } = useAuth();
@@ -35,7 +39,8 @@ export const AuthModal = ({ onClose, onComplete, intent = null }) => {
     const [verifyEmailOtp] = useVerifyEmailOtpMutation();
 
     const [completeProfile] = useCompleteProfileMutation();
-    const [checkUserRole] = useCheckUserRoleMutation();
+    // Token from the OTP reply, kept for the "What's your name?" step
+    const [sessionToken, setSessionToken] = useState('');
 
     useEffect(() => {
         document.body.style.overflow = 'hidden';
@@ -107,7 +112,8 @@ export const AuthModal = ({ onClose, onComplete, intent = null }) => {
             try {
                 const response = await verifyOTP({ mobile: normalizedPhone, otp: otpCode }).unwrap();
                 // phone OTP may return `accessToken` or `token` — accept either
-                const authToken = response?.accessToken || response?.token;
+                const authToken = tokenFrom(response);
+                if (!authToken) throw { data: { message: 'Sign-in failed: the server did not return a login token. Please restart the server and try again.' } };
                 finalizeAuth(response?.user, authToken, response?.needsFullName, response?.user?.email || '');
             } catch (err) {
                 setErrorMessage(err?.data?.message || 'Incorrect OTP');
@@ -159,21 +165,11 @@ export const AuthModal = ({ onClose, onComplete, intent = null }) => {
             userRole: String(verifiedUser?.role || 'BUYER').toLowerCase().replace(/-/g, '_'),
         };
 
-        const emailToCheck = (userEmail || verifiedUser?.email || '').trim().toLowerCase();
-        if (emailToCheck) {
-            try {
-                const roleCheck = await checkUserRole({ email: emailToCheck }).unwrap();
-                const resolvedRole = String(roleCheck?.data?.role || baseUser.role || 'buyer').toLowerCase().replace(/-/g, '_');
-                baseUser.role = resolvedRole;
-                baseUser.userRole = resolvedRole;
-                baseUser.isNewUser = roleCheck?.data?.exists === false;
-                baseUser.exists = roleCheck?.data?.exists;
-            } catch (err) {
-                console.error('Role check failed during login:', err);
-            }
-        }
+        // The role comes from the verified account itself (ADMIN | SELLER | BUYER | INSPECTOR).
+        // (The old POST /users/check-role lookup never existed on the server and always failed.)
 
         // Persist the session either way — NAME step needs a valid token to call completeProfile
+        setSessionToken(token || '');
         completeAuth?.(baseUser, token);
 
         if (needsFullName) {
@@ -236,7 +232,9 @@ export const AuthModal = ({ onClose, onComplete, intent = null }) => {
 
             try {
                 const response = await verifyEmailOtp({ email, otp: otpCode }).unwrap();
-                finalizeAuth(response?.user, response?.accessToken || response?.token, response?.needsFullName, email);
+                const authToken = tokenFrom(response);
+                if (!authToken) throw { data: { message: 'Sign-in failed: the server did not return a login token. Please restart the server and try again.' } };
+                finalizeAuth(response?.user, authToken, response?.needsFullName, email);
             } catch (err) {
                 setErrorMessage(err?.data?.message || 'Incorrect OTP');
                 setEmailOtp(['', '', '', '', '', '']);
@@ -298,10 +296,11 @@ export const AuthModal = ({ onClose, onComplete, intent = null }) => {
         setErrorMessage('');
 
         try {
-            const response = await completeProfile(payload).unwrap();
+            const token = sessionToken || localStorage.getItem('vehiclehub_token') || '';
+            const response = await completeProfile({ ...payload, token }).unwrap();
             const updatedUser = response?.user || { ...user, fullName: name.trim() };
 
-            const nextUser = completeAuth?.(updatedUser, localStorage.getItem('vehiclehub_token'));
+            const nextUser = completeAuth?.(updatedUser, token);
             const userToUse = nextUser || updatedUser;
             onComplete?.(userToUse, intent); // now finalize for real — no more NAME loop
             return;

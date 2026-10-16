@@ -12,15 +12,15 @@
 //   - Your own users, vehicles and sellers are never touched.
 //   - Brands, categories and revenue snapshots are upserted.
 //
-// The app has exactly four login roles: Admin, Seller, Buyer, Field Inspector.
-// Login after seeding (phone OTP, code = DummyOTP in .env, default 1234):
+// Login roles: Admin, Seller (individual), Dealer (shop), Buyer, Field Inspector.
+// Sign in on /login with the mobile number (or the seed email) and password 123456:
 //   Admin             9506536127
-//   Sellers           9000000011 (dealer) · 9000000012 (individual) · 9000000013 (dealer)  — approved
+//   Dealers           9000000011 · 9000000013   Seller (individual) 9000000012   — approved
 //   Seller applicants 9000000014 (application PENDING admin review) · 9000000015 (REJECTED)
 //                     — these two are still Buyers until an admin approves them
 //   Buyers            9000000021 … 9000000026
 //   Field Inspectors  9000000031 · 9000000032
-// Email + password login (POST /api/auth/login): any seed email / Password@123
+// (POST /api/auth/login { identifier, password } — identifier = email or mobile number)
 // ============================================================
 
 import { PrismaClient } from "@prisma/client";
@@ -30,8 +30,8 @@ const prisma = new PrismaClient();
 
 const SEED_EMAIL_DOMAIN = "@seed.vehiclehub.in";
 const SEED_SLUG_PREFIX = "seed-";
-const DEFAULT_PASSWORD = "Password@123";
-const ADMIN_PHONE = "+919506536127"; // OTPController treats this number as ADMIN
+const DEFAULT_PASSWORD = "123456";
+const ADMIN_PHONE = "+919506536127";
 
 // ------------------------------------------------------------
 // helpers
@@ -320,7 +320,7 @@ async function seedUsers() {
     where: { phone: ADMIN_PHONE },
     update: { role: "ADMIN", fullName: "Auro Admin", isActive: true, isBlocked: false, isVerified: true },
     create: {
-      email: "919506536127@vehiclehub.local", // same as OTPController.createUserRecord
+      email: "919506536127@vehiclehub.local",
       password,
       role: "ADMIN",
       fullName: "Auro Admin",
@@ -1012,7 +1012,7 @@ async function main() {
   const activity = await seedActivity(users, vehicles);
   await seedCommunication(users, vehicles, activity);
   console.log("Done ✔");
-  console.log("Login with phone OTP (code from DummyOTP, default 1234): admin 9506536127 · dealer 9000000011 · seller 9000000012 · buyer 9000000021 · field inspector 9000000031");
+  console.log("Sign in on /login with mobile number + password 123456: admin 9506536127 · dealer 9000000011 · seller 9000000012 · buyer 9000000021 · field inspector 9000000031");
 }
 
 main()

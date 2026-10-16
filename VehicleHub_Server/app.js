@@ -14,7 +14,6 @@ import { notFound, errorHandler } from "./src/middleware/errorMiddleware.js";
 import { authenticateUser } from "./src/middleware/authMiddleware.js";
 import routes from "./src/routes/index.js";
 import authRoutes from "./src/routes/authRoutes.js";
-import OTPRoute from "./src/routes/OTPRoute.js";
 import VehicleRoutes from "./src/routes/vehicleRoutes.js";
 
 
@@ -40,7 +39,6 @@ app.use(cookieParser());
  // Routs
 app.use("/api/sellers", SellerRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/otp", OTPRoute);
 
 // Vehicle routes
 app.use("/api/vehicles", VehicleRoutes);
