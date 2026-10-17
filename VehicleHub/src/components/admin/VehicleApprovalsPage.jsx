@@ -1,5 +1,7 @@
+// VehicleHub/VehicleHub/src/components/admin/VehicleApprovalsPage.jsx
 import { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
+import { toast } from 'react-hot-toast';
 import { CheckCircle2, Eye, Clock, ArrowRight, Loader2, XCircle } from 'lucide-react';
 import { useApproveVehicleMutation, useGetPendingVehiclesQuery, useRejectVehicleMutation } from '../../services/adminApiSlice.js';
 import { VehicleReviewModal } from '../../components/admin/VehicleReviewModal.jsx';
@@ -12,11 +14,21 @@ export const VehicleApprovalsPage = () => {
     const items = data?.data?.vehicles || [];
 
     const handleApprove = async (vehicle) => {
-        await approveVehicle(vehicle.id).unwrap();
+        try {
+            await approveVehicle(vehicle.id).unwrap();
+            toast.success(`${vehicle.title} approved — it's now live`);
+        } catch (err) {
+            toast.error(err?.data?.message || 'Could not approve this vehicle. Please try again.');
+        }
     };
 
     const handleReject = async (vehicle, reason) => {
-        await rejectVehicle({ id: vehicle.id, reason }).unwrap();
+        try {
+            await rejectVehicle({ id: vehicle.id, reason }).unwrap();
+            toast.success(`${vehicle.title} rejected — the seller has been told why`);
+        } catch (err) {
+            toast.error(err?.data?.message || 'Could not reject this vehicle. Please try again.');
+        }
     };
 
     return (

@@ -54,7 +54,7 @@ export const AdminDashboardLayout = ({ children }) => {
             <AdminNavbar sidebarWidth={76} onOpenMobileMenu={() => setMobileDrawerOpen(true)} />
 
             <main className="min-h-screen pt-[68px] transition-all duration-200 lg:pl-[76px] lg:pt-20">
-                <div className="mx-auto max-w-7xl px-3 py-5 sm:px-5 sm:py-6 lg:px-8">{children}</div>
+                <div className="w-full px-3 py-5 sm:px-5 sm:py-6 lg:px-6">{children}</div>
             </main>
         </div>
     );

@@ -7,17 +7,21 @@ import {
     ShieldCheck, Camera, FileText, Home, MapPin, Phone,
     Building2, CreditCard, Landmark, CheckCircle2, User, Clock, XCircle, Loader2, Search, Lock,
 } from "lucide-react";
+import { FaWhatsapp } from "react-icons/fa";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useAuthGate } from "../../context/AuthGateContext.jsx";
 import { fetchSellerStatus, openSellerArea } from "../../utils/sellerStatus.js";
 
 
 import { useRegisterSellerMutation } from "../../services/sellerApiSlice.js";
+import { isValidWhatsApp } from "../../utils/whatsapp.js";
 
 const initialFormData = {
 
     sellerType: "Individual",
     ownerName: "", businessName: "", email: "", phone: "",
+    // WhatsApp: buyers are sent here after a purchase request
+    whatsappSameAsPhone: true, whatsappNumber: "",
     address: "", city: "", state: "", pincode: "",
     gstNumber: "", panNumber: "",
     yearsInBusiness: "", website: "",
@@ -92,6 +96,9 @@ export const SellerRegistration = () => {
                     ownerName: st.sellerProfile.ownerName || prev.ownerName,
                     businessName: st.sellerProfile.businessName || prev.businessName,
                     sellerType: st.sellerProfile.sellerType === 'DEALER' ? 'Dealer' : 'Individual',
+                    ...(st.sellerProfile.whatsappNumber && !st.sellerProfile.whatsappSameAsPhone
+                        ? { whatsappSameAsPhone: false, whatsappNumber: st.sellerProfile.whatsappNumber }
+                        : {}),
                 }));
             }
         });
@@ -129,6 +136,14 @@ export const SellerRegistration = () => {
 
         const fullName = formData.ownerName?.trim() || formData.businessName?.trim() || user?.name || 'Seller';
         const phone = formData.phone?.trim() || user?.phone || '';
+        if (formData.whatsappSameAsPhone && !isValidWhatsApp(phone)) {
+            toast.error("Your phone number isn't a valid WhatsApp mobile number. Untick \"also my WhatsApp number\" and enter your WhatsApp number.");
+            return;
+        }
+        if (!formData.whatsappSameAsPhone && formData.whatsappNumber.trim() && !isValidWhatsApp(formData.whatsappNumber)) {
+            toast.error('Enter a valid WhatsApp mobile number (10 digits, or with country code).');
+            return;
+        }
         setSubmitting(true);
         try {
             const fd = new FormData();
@@ -138,6 +153,8 @@ export const SellerRegistration = () => {
             if (formData.businessName) fd.append('businessName', formData.businessName);
             fd.append('email', formData.email?.trim() || user?.email || '');
             fd.append('phone', phone);
+            fd.append('whatsappSameAsPhone', formData.whatsappSameAsPhone ? 'true' : 'false');
+            if (!formData.whatsappSameAsPhone) fd.append('whatsappNumber', formData.whatsappNumber.trim());
             fd.append('address', formData.address);
             fd.append('city', formData.city);
             fd.append('state', formData.state);
@@ -306,7 +323,31 @@ export const SellerRegistration = () => {
                                     <Field label="Owner name" required><TextInput type="text" name="ownerName" value={formData.ownerName} onChange={handleChange} required /></Field>
                                     <Field label={formData.sellerType === 'Dealer' ? 'Shop / business name' : 'Business name (optional)'} required={formData.sellerType === 'Dealer'}><TextInput type="text" name="businessName" value={formData.businessName} onChange={handleChange} required={formData.sellerType === 'Dealer'} placeholder="e.g. RK Dealerships" /></Field>
                                     <Field label="Email" required><TextInput type="email" name="email" value={formData.email} onChange={handleChange} required /></Field>
-                                    <Field label="Phone" required><TextInput type="tel" name="phone" value={formData.phone} onChange={handleChange} required /></Field>
+                                    {/* Phone + WhatsApp */}
+                                    <div className="space-y-2 text-sm text-slate-700">
+                                        <label htmlFor="seller-phone" className="block font-semibold">Phone <span className="text-red-500">*</span></label>
+                                        <div className="relative">
+                                            <TextInput id="seller-phone" type="tel" name="phone" value={formData.phone} onChange={handleChange} required placeholder="98765 43210" style={{ paddingRight: '2.75rem' }} />
+                                            <FaWhatsapp
+                                                size={20}
+                                                title={formData.whatsappSameAsPhone ? 'This number is on WhatsApp' : 'Not your WhatsApp number'}
+                                                className={`pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 transition ${formData.whatsappSameAsPhone ? 'text-[#25D366]' : 'text-slate-300'}`}
+                                            />
+                                        </div>
+                                        <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+                                            <input type="checkbox" name="whatsappSameAsPhone" checked={formData.whatsappSameAsPhone} onChange={handleChange} className="h-4 w-4 accent-[#25D366]" />
+                                            This is also my WhatsApp number
+                                        </label>
+                                        {!formData.whatsappSameAsPhone && (
+                                            <div className="space-y-1.5 pt-1">
+                                                <label htmlFor="seller-whatsapp" className="flex items-center gap-1.5 font-semibold">
+                                                    <FaWhatsapp size={15} className="text-[#25D366]" /> WhatsApp number
+                                                </label>
+                                                <TextInput id="seller-whatsapp" type="tel" name="whatsappNumber" value={formData.whatsappNumber} onChange={handleChange} placeholder="WhatsApp mobile number" />
+                                                <span className="block text-xs text-slate-400">Buyers message you here after sending a purchase request. Leave empty if you don't use WhatsApp.</span>
+                                            </div>
+                                        )}
+                                    </div>
                                     <Field label="Years in business"><TextInput type="number" name="yearsInBusiness" value={formData.yearsInBusiness} onChange={handleChange} placeholder="e.g. 5" /></Field>
                                     <Field label="Website (optional)"><TextInput type="text" name="website" value={formData.website} onChange={handleChange} placeholder="https://" /></Field>
                                 </div>

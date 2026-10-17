@@ -1,10 +1,16 @@
+// VehicleHub/VehicleHub/src/components/buyer/PurchaseRequestModal.jsx
+// Purchase request form. After the request is saved (existing flow, unchanged), WhatsApp opens
+// with a prefilled message to the seller's / dealer's WhatsApp number — the buyer reviews it and
+// taps Send. If the seller has no WhatsApp number, the request is still sent as usual.
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'react-hot-toast';
-import { X, ShoppingBag, Loader2, ShieldCheck } from 'lucide-react';
+import { X, ShoppingBag, Loader2, ShieldCheck, CheckCircle2, Info, ExternalLink } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
 import { useCreatePurchaseRequestMutation } from '../../services/buyerApiSlice.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatCurrency } from '../../utils/formatters.js';
+import { buildPurchaseRequestMessage, whatsappChatUrl, openWhatsAppChat } from '../../utils/whatsapp.js';
 
 export const PurchaseRequestModal = ({ vehicle, onClose }) => {
     const { user } = useAuth();
@@ -16,6 +22,8 @@ export const PurchaseRequestModal = ({ vehicle, onClose }) => {
         buyerEmail: user?.email || '',
         message: '',
     });
+    // Set once the request is saved: { url (WhatsApp link or null), opened, text }
+    const [sent, setSent] = useState(null);
 
     useEffect(() => {
         document.body.style.overflow = 'hidden';
@@ -33,9 +41,14 @@ export const PurchaseRequestModal = ({ vehicle, onClose }) => {
             return toast.error('Name, phone, and offer price are required');
         }
         try {
-            await createPurchaseRequest({ vehicleListingId: vehicle.id, ...form }).unwrap();
+            const res = await createPurchaseRequest({ vehicleListingId: vehicle.id, ...form }).unwrap();
             toast.success('Purchase request sent to the seller!');
-            onClose();
+
+            // The request is saved — now hand the buyer over to WhatsApp (they must tap Send there)
+            const text = buildPurchaseRequestMessage({ vehicle, ...form });
+            const url = whatsappChatUrl(res?.data?.sellerWhatsapp, text);
+            const opened = url ? openWhatsAppChat(url) : false;
+            setSent({ url, opened, text });
         } catch (err) {
             toast.error(err?.data?.message || 'Failed to send purchase request');
         }
@@ -58,6 +71,59 @@ export const PurchaseRequestModal = ({ vehicle, onClose }) => {
                     </button>
                 </div>
 
+                {sent ? (
+                    <div className="space-y-4 overflow-y-auto p-4 sm:p-6">
+                        <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3">
+                            <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-600" />
+                            <div>
+                                <p className="text-sm font-bold text-slate-900">Purchase request sent</p>
+                                <p className="mt-0.5 text-xs text-slate-600">The seller has been notified. You can track it under My Orders.</p>
+                            </div>
+                        </div>
+
+                        {sent.url ? (
+                            <>
+                                <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+                                    <p className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                                        <FaWhatsapp size={18} className="text-[#25D366]" />
+                                        {sent.opened ? 'WhatsApp opened in a new tab' : 'Continue on WhatsApp'}
+                                    </p>
+                                    <p className="mt-1 text-xs text-slate-600">
+                                        {sent.opened
+                                            ? 'Your message to the seller is ready there. Review it and tap Send. Nothing is sent until you do.'
+                                            : 'Tap the button below to open WhatsApp with your message filled in. Review it and tap Send.'}
+                                    </p>
+                                    <pre className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 font-sans text-xs leading-relaxed text-slate-700">{sent.text}</pre>
+                                </div>
+                                <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row">
+                                    <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+                                        Done
+                                    </button>
+                                    <a
+                                        href={sent.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#25D366] py-3 text-sm font-bold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#1ebe5a] hover:shadow-md"
+                                    >
+                                        <FaWhatsapp size={17} /> {sent.opened ? 'Open WhatsApp again' : 'Open WhatsApp'} <ExternalLink size={13} />
+                                    </a>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+                                    <Info size={18} className="mt-0.5 shrink-0 text-amber-600" />
+                                    <p className="text-xs text-slate-700">
+                                        This seller hasn't added a WhatsApp number, so we couldn't open WhatsApp. Your request has still been sent, and the seller will contact you on {form.buyerPhone}.
+                                    </p>
+                                </div>
+                                <button type="button" onClick={onClose} className="w-full rounded-xl bg-[#001f3f] py-3 text-sm font-bold text-white transition hover:bg-[#002a55]">
+                                    Done
+                                </button>
+                            </>
+                        )}
+                    </div>
+                ) : (
                 <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto p-4 sm:p-6">
                     <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-3.5 py-3">
                         <div>
@@ -128,6 +194,7 @@ export const PurchaseRequestModal = ({ vehicle, onClose }) => {
                         </button>
                     </div>
                 </form>
+                )}
             </div>
         </div>,
         document.body

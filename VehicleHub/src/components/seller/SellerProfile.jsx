@@ -6,6 +6,8 @@ import {
     Camera, ShieldCheck, Star, MapPin, Phone, Mail, Building2, Save,
     Pencil, CheckCircle2, Clock, FileText, Award, TrendingUp, X, Loader2, XCircle, Upload, Trash2,
 } from 'lucide-react';
+import { FaWhatsapp } from 'react-icons/fa';
+import { isValidWhatsApp } from '../../utils/whatsapp.js';
 import {
     useGetMyProfileQuery,
     useUpdateMyProfileMutation,
@@ -54,6 +56,8 @@ export const SellerProfilePage = () => {
                 businessName: profile.businessName || '',
                 description: profile.description || '',
                 phone: profile.phone || '',
+                whatsappSameAsPhone: Boolean(profile.whatsappSameAsPhone),
+                whatsappNumber: profile.whatsappSameAsPhone ? '' : profile.whatsappNumber || '',
                 sellerType: profile.sellerType || '',
                 gstNumber: profile.gstNumber || '',
                 panNumber: profile.panNumber || '',
@@ -120,6 +124,8 @@ export const SellerProfilePage = () => {
             businessName: profile.businessName || '',
             description: profile.description || '',
             phone: profile.phone || '',
+            whatsappSameAsPhone: Boolean(profile.whatsappSameAsPhone),
+            whatsappNumber: profile.whatsappSameAsPhone ? '' : profile.whatsappNumber || '',
             sellerType: profile.sellerType || '',
             gstNumber: profile.gstNumber || '',
             panNumber: profile.panNumber || '',
@@ -131,6 +137,14 @@ export const SellerProfilePage = () => {
     };
 
     const handleSave = async () => {
+        if (form.whatsappSameAsPhone && !isValidWhatsApp(form.phone)) {
+            toast.error("Your phone number isn't a valid WhatsApp mobile number. Untick \"also my WhatsApp number\" and enter it separately.");
+            return;
+        }
+        if (!form.whatsappSameAsPhone && form.whatsappNumber.trim() && !isValidWhatsApp(form.whatsappNumber)) {
+            toast.error('Enter a valid WhatsApp mobile number.');
+            return;
+        }
         try {
             const formData = new FormData();
             Object.entries(form).forEach(([key, value]) => {
@@ -278,8 +292,20 @@ export const SellerProfilePage = () => {
                                 <input disabled className={inputClass} value={profile.email || profile.user?.email || ''} />
                             </Field>
                             <Field label="Phone">
-                                <input disabled={!editing} type="tel" className={inputClass} value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+                                <div className="relative">
+                                    <input disabled={!editing} type="tel" className={`${inputClass} pr-10`} value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+                                    <FaWhatsapp size={18} className={`pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 ${form.whatsappSameAsPhone ? 'text-[#25D366]' : 'text-slate-300'}`} />
+                                </div>
+                                <label className={`mt-2 flex items-center gap-2 text-xs text-slate-600 ${editing ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+                                    <input type="checkbox" disabled={!editing} checked={form.whatsappSameAsPhone} onChange={(e) => set('whatsappSameAsPhone', e.target.checked)} className="h-4 w-4 accent-[#25D366]" />
+                                    This is also my WhatsApp number
+                                </label>
                             </Field>
+                            {!form.whatsappSameAsPhone && (
+                                <Field label="WhatsApp Number">
+                                    <input disabled={!editing} type="tel" className={inputClass} value={form.whatsappNumber} onChange={(e) => set('whatsappNumber', e.target.value)} placeholder="Leave empty if you don't use WhatsApp" />
+                                </Field>
+                            )}
                             {/* Account type decides Seller vs Dealer access — set by the admin-approved application, not editable */}
                             <Field label="Account Type">
                                 <input disabled className={inputClass} value={form.sellerType === 'Dealer' ? 'Dealer (shop — many vehicles)' : 'Seller (individual — one vehicle)'} />
@@ -336,6 +362,9 @@ export const SellerProfilePage = () => {
                         <div className="space-y-3 text-sm">
                             <div className="flex items-center gap-2.5 text-slate-700">
                                 <Phone size={14} className="shrink-0 text-[#001f3f]" /> {profile.phone || 'Not set'}
+                            </div>
+                            <div className="flex items-center gap-2.5 text-slate-700">
+                                <FaWhatsapp size={14} className="shrink-0 text-[#25D366]" /> {profile.whatsappNumber || 'Not set — buyers can\'t reach you on WhatsApp'}
                             </div>
                             <div className="flex items-center gap-2.5 text-slate-700">
                                 <Mail size={14} className="shrink-0 text-[#001f3f]" /> {profile.email || profile.user?.email || 'Not set'}

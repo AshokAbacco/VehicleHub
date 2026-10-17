@@ -11,7 +11,7 @@
 import { z } from "zod";
 import { prisma } from "../config/db.js";
 import { storeUpload, deleteStoredFiles } from "../utils/storeUpload.js";
-import { normalizePhone } from "../utils/phone.js";
+import { normalizePhone, normalizeWhatsApp } from "../utils/phone.js";
 import bcrypt from "bcryptjs";
 import { generateAccessToken } from "../utils/generateToken.js";
 import { SELLING_ROLES, roleForSellerType, listingAllowance, accountTypeLabel } from "../utils/sellerAccount.js";
@@ -39,6 +39,9 @@ const sellerRegistrationSchema = z.object({
   bankIFSC: z.string().optional().nullable(),
   bankName: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
+  // WhatsApp: "true" = the phone number above is also WhatsApp; otherwise an optional other number
+  whatsappSameAsPhone: z.union([z.boolean(), z.string()]).optional().nullable(),
+  whatsappNumber: z.string().optional().nullable(),
 }).superRefine((d, ctx) => {
   // A dealer account is a shop — it needs the shop / business name
   if (d.sellerType === "Dealer" && !String(d.businessName || "").trim()) {
@@ -56,6 +59,21 @@ const notifyAdmins = async (tx, data) => {
   const admins = await tx.user.findMany({ where: { role: "ADMIN", isActive: true }, select: { id: true } });
   if (!admins.length) return;
   await tx.notification.createMany({ data: admins.map((a) => ({ ...data, userId: a.id })) });
+};
+
+/**
+ * WhatsApp choice from the registration / profile form.
+ *   sameAsPhone true  -> the phone number is the WhatsApp number
+ *   sameAsPhone false -> whatsappNumber (optional — empty means "no WhatsApp")
+ * Returns { number, sameAsPhone } or { error }.
+ */
+const resolveWhatsApp = (sameAsPhoneRaw, otherNumber, phone) => {
+  const sameAsPhone = sameAsPhoneRaw === true || String(sameAsPhoneRaw).toLowerCase() === "true";
+  const number = normalizeWhatsApp(sameAsPhone ? phone : otherNumber);
+  if (number === null) {
+    return { error: sameAsPhone ? "Your phone number isn't a valid WhatsApp mobile number — enter the WhatsApp number separately" : "Enter a valid WhatsApp mobile number" };
+  }
+  return { number: number || null, sameAsPhone };
 };
 
 // ============================================================
@@ -79,6 +97,11 @@ export const registerSeller = async (req, res) => {
       });
     }
     const data = parsed.data;
+
+    const whatsapp = resolveWhatsApp(data.whatsappSameAsPhone, data.whatsappNumber, data.phone);
+    if (whatsapp.error) {
+      return res.status(400).json({ message: "Please check the highlighted fields.", errors: { whatsappNumber: [whatsapp.error] } });
+    }
 
     let newAccount = null;
     if (isGuest) {
@@ -137,6 +160,8 @@ export const registerSeller = async (req, res) => {
       bankAccountNumber: data.bankAccountNumber || null,
       bankIFSC: data.bankIFSC || null,
       bankName: data.bankName || null,
+      whatsappNumber: whatsapp.number,
+      whatsappSameAsPhone: whatsapp.sameAsPhone,
       ...(profilePhotoUrl ? { profilePhoto: profilePhotoUrl } : {}),
       ...(shopLogoUrl ? { shopLogo: shopLogoUrl } : {}),
       verificationStatus: "PENDING",
@@ -242,6 +267,7 @@ export const getSellerStatus = async (req, res) => {
           select: {
             id: true, ownerName: true, businessName: true, sellerType: true,
             verificationStatus: true, rejectReason: true, submittedAt: true, reviewedAt: true,
+            whatsappNumber: true, whatsappSameAsPhone: true,
           },
         },
       },
@@ -349,6 +375,16 @@ export const updateMyProfile = async (req, res, next) => {
       const taken = await prisma.user.findFirst({ where: { phone, NOT: { id: req.user.id } }, select: { id: true } });
       if (taken) return res.status(409).json({ success: false, message: "This phone number is already used by another account" });
       userData.phone = phone;
+    }
+
+    // WhatsApp: changed when the form sends it, and kept in step with the phone when "same as phone"
+    if (b.whatsappSameAsPhone !== undefined || b.whatsappNumber !== undefined || (userData.phone && profile.whatsappSameAsPhone)) {
+      const sameAsPhone = b.whatsappSameAsPhone !== undefined ? b.whatsappSameAsPhone : profile.whatsappSameAsPhone;
+      const currentPhone = userData.phone || (await prisma.user.findUnique({ where: { id: req.user.id }, select: { phone: true } }))?.phone;
+      const whatsapp = resolveWhatsApp(sameAsPhone, b.whatsappNumber ?? profile.whatsappNumber, currentPhone);
+      if (whatsapp.error) return res.status(400).json({ success: false, message: whatsapp.error });
+      data.whatsappNumber = whatsapp.number;
+      data.whatsappSameAsPhone = whatsapp.sameAsPhone;
     }
 
     const [updated] = await prisma.$transaction([

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-    LayoutDashboard, Heart, MessageSquare, ShoppingBag, Search, Bell,
+    LayoutDashboard, Heart, ShoppingBag, Search, Bell,
     UserCircle, Settings, LogOut, Sparkles, X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -20,7 +20,6 @@ const groups = [
         label: 'My Activity',
         items: [
             { label: 'Wishlist', to: '/buyer/dashboard/wishlist', icon: Heart },
-            { label: 'My Inquiries', to: '/buyer/dashboard/inquiries', icon: MessageSquare },
             { label: 'Orders', to: '/buyer/dashboard/orders', icon: ShoppingBag },
         ],
     },

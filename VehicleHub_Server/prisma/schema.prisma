@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub_Server/prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -240,6 +241,11 @@ model SellerProfile {
   // Legal / compliance
   gstNumber String?
   panNumber String?
+
+  // WhatsApp contact — buyers are sent here after a purchase request.
+  // whatsappNumber is stored in "+91XXXXXXXXXX" format (null = no WhatsApp given).
+  whatsappNumber      String?
+  whatsappSameAsPhone Boolean @default(false)
 
   // Business metadata
   yearsInBusiness Int?

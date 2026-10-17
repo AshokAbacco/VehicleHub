@@ -363,7 +363,18 @@ export const createPurchaseRequest = async (req, res, next) => {
       return created;
     });
 
-    return ok(res, toPurchaseRequestDTO(request), "Purchase request sent to the seller", 201);
+    // The seller's / dealer's WhatsApp number (if they gave one) so the buyer can follow up there.
+    // Read after the request is saved; the request itself never depends on it.
+    const sellerProfile = vehicle.sellerId
+      ? await prisma.sellerProfile.findUnique({ where: { userId: vehicle.sellerId }, select: { whatsappNumber: true } })
+      : null;
+
+    return ok(
+      res,
+      { ...toPurchaseRequestDTO(request), sellerWhatsapp: sellerProfile?.whatsappNumber || null },
+      "Purchase request sent to the seller",
+      201,
+    );
   } catch (error) {
     next(error);
   }

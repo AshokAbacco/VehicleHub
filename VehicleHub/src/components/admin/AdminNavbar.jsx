@@ -1,13 +1,11 @@
 // VehicleHub/VehicleHub/src/components/admin/AdminNavbar.jsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageSquare, Search, ChevronDown, UserCircle, Menu, X } from 'lucide-react';
+import { Bell, Search, ChevronDown, UserCircle, Menu, X } from 'lucide-react';
 import { AdminNotificationsModal } from './AdminNotificationsModal.jsx';
-import { AdminMessagesModal } from './AdminMessagesModal.jsx';
 import {
     useGetPendingSellerCountQuery,
     useGetAdminNotificationsQuery,
-    useGetAdminConversationsQuery,
 } from '../../services/adminApiSlice.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 
@@ -15,18 +13,15 @@ export const AdminNavbar = ({ sidebarWidth, onOpenMobileMenu }) => {
     const navigate = useNavigate();
     const { logout, user } = useAuth();
     const [notifOpen, setNotifOpen] = useState(false);
-    const [msgOpen, setMsgOpen] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
     const [search, setSearch] = useState('');
 
-    // Live badges: unread notifications (or seller applications waiting), unread messages
+    // Live badge: unread notifications (or seller applications waiting)
     const { data: pendingCountData } = useGetPendingSellerCountQuery(undefined, { pollingInterval: 30000 });
     const { data: notifData } = useGetAdminNotificationsQuery(undefined, { pollingInterval: 30000 });
-    const { data: convoData } = useGetAdminConversationsQuery(undefined, { pollingInterval: 30000 });
     const pendingSellerCount = pendingCountData?.count || 0;
     const unread = Math.max(notifData?.data?.unreadCount || 0, pendingSellerCount);
-    const unreadMessages = convoData?.data?.unreadCount || 0;
     const adminName = user?.name || user?.fullName || 'Admin';
 
     // Navbar search opens All Vehicles filtered by the text
@@ -88,21 +83,6 @@ export const AdminNavbar = ({ sidebarWidth, onOpenMobileMenu }) => {
                             )}
                         </button>
 
-                        {/* ...messages button + profile dropdown unchanged... */}
-                        <button
-                            onClick={() => setMsgOpen(true)}
-                            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 sm:h-11 sm:w-11"
-                            aria-label="Messages"
-                        >
-                            <MessageSquare size={17} className="sm:hidden" />
-                            <MessageSquare size={18} className="hidden sm:block" />
-                            {unreadMessages > 0 && (
-                                <span className="absolute -right-1 -top-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-[#001f3f] text-[9px] font-bold text-white ring-2 ring-white sm:h-5 sm:w-5 sm:text-[10px]">
-                                    {unreadMessages > 99 ? '99+' : unreadMessages}
-                                </span>
-                            )}
-                        </button>
-
                         <div className="relative">
                             <button
                                 onClick={() => setDropdownOpen((v) => !v)}
@@ -141,7 +121,6 @@ export const AdminNavbar = ({ sidebarWidth, onOpenMobileMenu }) => {
             </header>
 
             {notifOpen && <AdminNotificationsModal onClose={() => setNotifOpen(false)} />}
-            {msgOpen && <AdminMessagesModal onClose={() => setMsgOpen(false)} />}
         </>
     );
 };

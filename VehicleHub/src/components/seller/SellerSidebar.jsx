@@ -158,15 +158,23 @@
 //     );
 // };
 import { useState } from 'react';
-import { Home, ShoppingBag, Archive, Sparkles, X, Bell, LogOut, Users, Car, MessageSquare } from 'lucide-react';
+import { Home, ShoppingBag, Archive, Sparkles, X, Bell, LogOut, Car, ShoppingCart } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSellerArea } from '../../hooks/useSellerArea.js';
-import { useGetMyProfileQuery } from '../../services/sellerApiSlice.js';
+import { useGetMyProfileQuery, useGetPurchaseRequestsQuery } from '../../services/sellerApiSlice.js';
 
-// Same menu for Sellers (/seller/dashboard) and Dealers (/dealer/dashboard)
+// Same menu for Sellers (/seller/dashboard) and Dealers (/dealer/dashboard).
+// Purchase Requests sits in Marketplace and is the only item with a count badge
+// (requests still waiting for the seller's decision).
 const buildSections = (to, isDealer) => [
-    { title: 'Marketplace', accent: 'text-[#001f3f]', items: [{ to: to(), label: 'Dashboard', icon: Home, end: true }] },
+    {
+        title: 'Marketplace', accent: 'text-[#001f3f]',
+        items: [
+            { to: to(), label: 'Dashboard', icon: Home, end: true },
+            { to: to('purchase-requests'), label: 'Purchase Requests', icon: ShoppingCart, badgeKey: 'purchaseRequests' },
+        ],
+    },
     {
         title: isDealer ? 'Shop Inventory' : 'My Listing', accent: 'text-emerald-600',
         items: [
@@ -174,7 +182,6 @@ const buildSections = (to, isDealer) => [
             { to: to('inventory'), label: 'Inventory', icon: ShoppingBag },
             { to: to('sold-vehicles'), label: 'Sold Vehicles', icon: Archive },
             { to: to('inspection-requests'), label: 'Inspection Requests', icon: Car },
-            { to: to('purchase-requests'), label: 'Purchase Requests', icon: ShoppingBag },
             { to: to('notifications'), label: 'Notifications', icon: Bell },
         ],
     },
@@ -187,6 +194,12 @@ export const SellerSidebar = ({ forceExpanded = false, isMobile = false, onNavig
     const sections = buildSections(to, isDealer);
     const { data: profileData } = useGetMyProfileQuery();
     const profile = profileData?.data;
+    // Pending purchase requests -> badge (same query as the Purchase Requests page, so it
+    // updates as soon as the seller accepts / rejects one; also refreshes every 30s)
+    const { data: purchaseRequestsData } = useGetPurchaseRequestsQuery(undefined, { pollingInterval: 30000 });
+    const badges = {
+        purchaseRequests: (purchaseRequestsData?.data || []).filter((r) => r.status === 'PENDING').length,
+    };
     const [hoverExpanded, setHoverExpanded] = useState(false);
     const expanded = forceExpanded || hoverExpanded;
 
@@ -250,13 +263,15 @@ export const SellerSidebar = ({ forceExpanded = false, isMobile = false, onNavig
                         <div className="space-y-1">
                             {section.items.map((item, idx) => {
                                 const Icon = item.icon;
+                                const count = item.badgeKey ? badges[item.badgeKey] || 0 : 0;
+                                const countText = count > 99 ? '99+' : count;
                                 return (
                                     <NavLink
                                         key={item.to}
                                         to={item.to}
                                         end={item.end}
                                         onClick={handleLinkClick}
-                                        title={!expanded ? item.label : undefined}
+                                        title={!expanded ? (count ? `${item.label} (${count} pending)` : item.label) : undefined}
                                         style={{ animationDelay: `${(sIdx * 6 + idx) * 30}ms` }}
                                         className={({ isActive }) =>
                                             `group relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${expanded ? '' : 'justify-center'
@@ -266,8 +281,24 @@ export const SellerSidebar = ({ forceExpanded = false, isMobile = false, onNavig
                                             }`
                                         }
                                     >
-                                        <Icon size={18} className="shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                                        {expanded && <span className="truncate">{item.label}</span>}
+                                        {({ isActive }) => (
+                                            <>
+                                                <span className="relative shrink-0">
+                                                    <Icon size={18} className="transition-transform duration-200 group-hover:scale-110" />
+                                                    {!expanded && count > 0 && (
+                                                        <span className="absolute -right-2.5 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white">
+                                                            {countText}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                {expanded && <span className="flex-1 truncate">{item.label}</span>}
+                                                {expanded && count > 0 && (
+                                                    <span className={`ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${isActive ? 'bg-white text-[#001f3f]' : 'bg-red-500 text-white'}`}>
+                                                        {countText}
+                                                    </span>
+                                                )}
+                                            </>
+                                        )}
                                     </NavLink>
                                 );
                             })}

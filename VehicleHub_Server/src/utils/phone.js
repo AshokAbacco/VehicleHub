@@ -7,3 +7,15 @@ export const normalizePhone = (value) => {
   if (!digits) return "";
   return digits.length === 10 ? `+91${digits}` : `+${digits}`;
 };
+
+/**
+ * WhatsApp numbers: same "+91XXXXXXXXXX" format. Returns "" for empty input and null when the
+ * number isn't a valid mobile number (Indian numbers must be 10 digits starting 6-9;
+ * other countries 8-15 digits with the country code).
+ */
+export const normalizeWhatsApp = (value) => {
+  const phone = normalizePhone(value);
+  if (!phone) return "";
+  if (phone.startsWith("+91")) return /^\+91[6-9]\d{9}$/.test(phone) ? phone : null;
+  return /^\+[1-9]\d{7,14}$/.test(phone) ? phone : null;
+};

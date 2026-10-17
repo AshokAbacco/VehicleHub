@@ -1,5 +1,6 @@
+// VehicleHub/VehicleHub/src/components/admin/VehicleReviewModal.jsx
 import { useEffect, useRef, useState } from 'react';
-import { X, CheckCircle2, XCircle, Car, Settings2, FileText, Sparkles, User, MapPin, ImageIcon, ChevronDown } from 'lucide-react';
+import { X, CheckCircle2, XCircle, Car, Settings2, FileText, Sparkles, User, MapPin, ImageIcon, Send } from 'lucide-react';
 
 const InfoRow = ({ label, value }) => (
     <div className="rounded-xl bg-slate-50 p-3">
@@ -15,9 +16,9 @@ const SectionTitle = ({ icon: Icon, children }) => (
 );
 
 export const VehicleReviewModal = ({ vehicle, onClose, onApprove, onReject }) => {
-    const [decision, setDecision] = useState(''); // '', 'approve', 'reject'
+    // Pick Approve or Reject first, then confirm with "Submit Decision" (nothing is saved on the first click)
+    const [decision, setDecision] = useState(''); // '' | 'approve' | 'reject'
     const [reason, setReason] = useState('');
-    const [dropdownOpen, setDropdownOpen] = useState(false);
     const modalRef = useRef(null);
 
     useEffect(() => {
@@ -31,14 +32,13 @@ export const VehicleReviewModal = ({ vehicle, onClose, onApprove, onReject }) =>
         return () => document.removeEventListener('mousedown', handleClick);
     }, [onClose]);
 
+    // A rejection always needs a reason — the seller sees it
+    const canSubmit = decision === 'approve' || (decision === 'reject' && reason.trim().length > 0);
+
     const handleSubmit = () => {
-        if (!decision) return;
-        if (decision === 'approve') {
-            onApprove(vehicle);
-        } else {
-            if (!reason.trim()) return;
-            onReject(vehicle, reason.trim());
-        }
+        if (!canSubmit) return;
+        if (decision === 'approve') onApprove(vehicle);
+        else onReject(vehicle, reason.trim());
         onClose();
     };
 
@@ -172,48 +172,61 @@ export const VehicleReviewModal = ({ vehicle, onClose, onApprove, onReject }) =>
                     </div>
                 </div>
 
-                {/* Footer — decision dropdown + reason + submit */}
+                {/* Footer — choose Approve or Reject, then Submit Decision */}
                 <div className="shrink-0 space-y-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4">
-                    <div className="relative">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Your decision</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
                         <button
-                            onClick={() => setDropdownOpen((v) => !v)}
-                            className="flex w-full items-center justify-between rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700"
+                            type="button"
+                            onClick={() => setDecision('approve')}
+                            aria-pressed={decision === 'approve'}
+                            className={`flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-2.5 text-sm font-bold transition ${decision === 'approve'
+                                ? 'border-emerald-600 bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                                : 'border-emerald-200 bg-white text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50'
+                                }`}
                         >
-                            {decision === 'approve' && <span className="flex items-center gap-2 text-emerald-600"><CheckCircle2 size={15} /> Approve this vehicle</span>}
-                            {decision === 'reject' && <span className="flex items-center gap-2 text-red-600"><XCircle size={15} /> Reject this vehicle</span>}
-                            {!decision && <span className="text-slate-400">Select a decision...</span>}
-                            <ChevronDown size={15} className={`transition ${dropdownOpen ? 'rotate-180' : ''}`} />
+                            <CheckCircle2 size={16} /> Approve — vehicle goes live
                         </button>
-                        {dropdownOpen && (
-                            <div className="absolute bottom-full left-0 z-10 mb-1 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-                                <button onClick={() => { setDecision('approve'); setDropdownOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-emerald-600 hover:bg-emerald-50">
-                                    <CheckCircle2 size={15} /> Approve — vehicle goes live
-                                </button>
-                                <button onClick={() => { setDecision('reject'); setDropdownOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50">
-                                    <XCircle size={15} /> Reject — request changes
-                                </button>
-                            </div>
-                        )}
+                        <button
+                            type="button"
+                            onClick={() => setDecision('reject')}
+                            aria-pressed={decision === 'reject'}
+                            className={`flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-2.5 text-sm font-bold transition ${decision === 'reject'
+                                ? 'border-red-600 bg-red-600 text-white shadow-md shadow-red-600/20'
+                                : 'border-red-200 bg-white text-red-600 hover:border-red-300 hover:bg-red-50'
+                                }`}
+                        >
+                            <XCircle size={16} /> Reject — request changes
+                        </button>
                     </div>
 
                     {decision === 'reject' && (
-                        <textarea
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
-                            rows={3}
-                            placeholder="Reason for rejection — this will be sent to the seller..."
-                            className="w-full rounded-xl border-2 border-red-200 bg-red-50/50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-red-400 focus:outline-none"
-                        />
+                        <div className="space-y-1.5">
+                            <label className="block text-sm font-semibold text-red-700">
+                                Why is this vehicle being rejected? <span className="font-normal text-slate-500">— the seller will see this</span>
+                            </label>
+                            <textarea
+                                autoFocus
+                                value={reason}
+                                onChange={(e) => setReason(e.target.value)}
+                                rows={3}
+                                placeholder="e.g. RC photo is unclear — please upload a clearer front image."
+                                className="w-full rounded-xl border-2 border-red-200 bg-red-50/50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-red-400 focus:outline-none"
+                            />
+                        </div>
                     )}
 
-                    <div className="flex justify-end gap-2">
-                        <button onClick={onClose} className="rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Close</button>
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <button onClick={onClose} className="rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                            Close
+                        </button>
                         <button
                             onClick={handleSubmit}
-                            disabled={!decision || (decision === 'reject' && !reason.trim())}
-                            className="rounded-xl bg-[#001f3f] px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-[#001f3f]/20 transition hover:bg-[#002a55] disabled:cursor-not-allowed disabled:opacity-40"
+                            disabled={!canSubmit}
+                            title={!decision ? 'Choose Approve or Reject first' : decision === 'reject' && !reason.trim() ? 'Enter a reason for the seller' : undefined}
+                            className="flex items-center justify-center gap-2 rounded-xl bg-[#001f3f] px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-[#001f3f]/20 transition hover:bg-[#002a55] disabled:cursor-not-allowed disabled:opacity-40"
                         >
-                            Submit Decision
+                            <Send size={15} /> Submit Decision
                         </button>
                     </div>
                 </div>

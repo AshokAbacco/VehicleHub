@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, CheckSquare, Car, Users, UserCircle2, IndianRupee,
-    ShoppingCart, MessageSquare, Bell, Settings, ShieldCheck, LogOut, X, PlusCircle, Receipt, ClipboardCheck
+    ShoppingCart, Bell, Settings, ShieldCheck, LogOut, X, PlusCircle, Receipt, ClipboardCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 
@@ -31,7 +31,6 @@ const sections = [
     {
         title: 'Engagement',
         items: [
-            { to: '/admin/dashboard/messages', label: 'Messages', icon: MessageSquare },
             { to: '/admin/dashboard/notifications', label: 'Notifications', icon: Bell },
         ],
     },

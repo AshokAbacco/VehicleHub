@@ -1,7 +1,7 @@
 // VehicleHub/VehicleHub/src/components/buyer/BuyerNavbar.jsx
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell, MessageCircle, ChevronDown, ChevronRight, UserCircle, LogOut, Settings, Heart } from 'lucide-react';
+import { Menu, Search, Bell, ChevronDown, ChevronRight, UserCircle, LogOut, Settings, Heart } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useGetBuyerNotificationsQuery } from '../../services/buyerApiSlice.js';
 
@@ -79,14 +79,6 @@ export const BuyerNavbar = ({ title, breadcrumb, onOpenSidebar }) => {
                                 {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
                             </span>
                         )}
-                    </button>
-
-                    <button
-                        onClick={() => navigate('/buyer/dashboard/inquiries')}
-                        className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition-all duration-200 hover:border-[#001f3f]/20 hover:bg-slate-50 sm:inline-flex"
-                        aria-label="Messages"
-                    >
-                        <MessageCircle size={17} />
                     </button>
 
                     <div className="relative">

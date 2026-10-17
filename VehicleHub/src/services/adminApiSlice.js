@@ -32,11 +32,13 @@ export const adminApi = apiSlice.injectEndpoints({
       query: () => '/vehicles/admin/pending',
       providesTags: [...ADMIN, 'Vehicle'],
     }),
-    approveVehicle: builder.mutation({
+    // Unique names: sellerApiSlice also defines approveVehicle / rejectVehicle (taking a plain id) and,
+    // sharing one apiSlice, the first definition won — so admin rejections went to /vehicles/[object Object]/reject.
+    adminApproveVehicle: builder.mutation({
       query: (id) => ({ url: `/vehicles/${id}/approve`, method: 'PATCH' }),
       invalidatesTags: [...ADMIN, 'Vehicle', 'Dashboard'],
     }),
-    rejectVehicle: builder.mutation({
+    adminRejectVehicle: builder.mutation({
       query: ({ id, reason }) => ({ url: `/vehicles/${id}/reject`, method: 'PATCH', body: { reason } }),
       invalidatesTags: [...ADMIN, 'Vehicle', 'Dashboard'],
     }),
@@ -146,8 +148,8 @@ export const {
   useDeleteAdminVehicleMutation,
   useCreateAdminVehicleMutation,
   useGetPendingVehiclesQuery,
-  useApproveVehicleMutation,
-  useRejectVehicleMutation,
+  useAdminApproveVehicleMutation: useApproveVehicleMutation,
+  useAdminRejectVehicleMutation: useRejectVehicleMutation,
 
   useGetAdminSellersQuery,
   useGetPendingSellersQuery,

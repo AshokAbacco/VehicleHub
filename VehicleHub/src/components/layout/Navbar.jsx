@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
     Search, Heart, User, Plus, MapPin, ChevronDown, Menu, X,
-    MessageCircle, Bell, FileText, ClipboardList, ShoppingCart,
+    Bell, FileText, ClipboardList, ShoppingCart,
     HelpCircle, Settings, LogOut, Pencil, LayoutDashboard,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -395,9 +395,6 @@ export const Navbar = () => {
                     <div className="mt-3 flex flex-col gap-2">
                         {isAuthenticated && (
                             <>
-                                <button onClick={() => navigate("/chat")} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-slate-700 transition hover:bg-slate-50 active:scale-[0.98]">
-                                    <MessageCircle size={16} /> Chat
-                                </button>
                                 <button onClick={() => navigate(notificationsPathFor(role))} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-slate-700 transition hover:bg-slate-50 active:scale-[0.98]">
                                     <Bell size={16} /> Notifications
                                 </button>
