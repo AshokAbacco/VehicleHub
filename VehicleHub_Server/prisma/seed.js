@@ -151,6 +151,7 @@ const CAR_FEATURES = [
 // ------------------------------------------------------------
 // 1. cleanup — remove only rows that belong to the seed
 // ------------------------------------------------------------
+
 async function cleanup() {
   const seedUsers = await prisma.user.findMany({
     where: { email: { endsWith: SEED_EMAIL_DOMAIN } },

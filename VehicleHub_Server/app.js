@@ -15,6 +15,7 @@ import { authenticateUser } from "./src/middleware/authMiddleware.js";
 import routes from "./src/routes/index.js";
 import authRoutes from "./src/routes/authRoutes.js";
 import VehicleRoutes from "./src/routes/vehicleRoutes.js";
+import contactUsRoutes from "./src/routes/contactUs.routes.js";
 
 
 const app = express();
@@ -43,7 +44,7 @@ app.use("/api/auth", authRoutes);
 // Vehicle routes
 app.use("/api/vehicles", VehicleRoutes);
 
-
+app.use("/api/contact-us", contactUsRoutes);
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,

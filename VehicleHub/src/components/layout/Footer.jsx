@@ -1,6 +1,8 @@
+// VehicleHub/VehicleHub/src/components/layout/Footer.jsx
 import { useState } from 'react';
-import { ArrowRight, Mail, Phone, MapPin } from 'lucide-react';
+import { Mail, Phone, MapPin, Send, Loader2, CheckCircle2, AlertCircle, TicketCheck, ChevronDown } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { useRaiseSupportTicketMutation, validateContactForm, contactErrorMessage, COMPANY_CONTACT } from '../../services/contactApiSlice.js';
 
 // Inline brand SVGs — no separate SocialIcons.jsx import needed
 const FacebookIcon = (props) => (
@@ -65,19 +67,46 @@ const popularCities = ['Mumbai', 'Delhi NCR', 'Bengaluru', 'Pune', 'Hyderabad', 
 
 export const Footer = () => {
     const location = useLocation();
-    const [email, setEmail] = useState('');
-    const [subscribed, setSubscribed] = useState(false);
+    // "Raise a Ticket" form -> emailed to the support team by the backend
+    const [ticket, setTicket] = useState({ name: '', email: '', message: '', website: '' });
+    const [ticketErrors, setTicketErrors] = useState({});
+    const [ticketStatus, setTicketStatus] = useState(null); // { type: 'success' | 'error', text }
+    const [ticketOpen, setTicketOpen] = useState(false); // form stays folded until the button is clicked
+    const [raiseTicket, { isLoading: sendingTicket }] = useRaiseSupportTicketMutation();
 
     const hiddenPaths = ['/login', '/register', '/forgot-password'];
     if (hiddenPaths.includes(location.pathname)) return null;
 
-    const handleSubscribe = (e) => {
-        e.preventDefault();
-        if (!email.trim()) return;
-        setSubscribed(true);
-        setEmail('');
-        setTimeout(() => setSubscribed(false), 3000);
+    const onTicketChange = (e) => {
+        const { name, value } = e.target;
+        setTicket((t) => ({ ...t, [name]: value }));
+        if (ticketErrors[name]) setTicketErrors((er) => ({ ...er, [name]: undefined }));
+        if (ticketStatus?.type === 'error') setTicketStatus(null);
     };
+
+    const handleTicketSubmit = async (e) => {
+        e.preventDefault();
+        const errors = validateContactForm(ticket);
+        setTicketErrors(errors);
+        if (Object.keys(errors).length) return;
+        setTicketStatus(null);
+        try {
+            const res = await raiseTicket({
+                name: ticket.name.trim(),
+                email: ticket.email.trim(),
+                message: ticket.message.trim(),
+                website: ticket.website,
+            }).unwrap();
+            setTicket({ name: '', email: '', message: '', website: '' });
+            setTicketStatus({ type: 'success', text: res?.message || 'Your ticket has been raised. Our team will contact you soon.' });
+        } catch (err) {
+            if (err?.data?.errors) setTicketErrors(err.data.errors);
+            setTicketStatus({ type: 'error', text: contactErrorMessage(err) });
+        }
+    };
+
+    const ticketInput = (field) =>
+        `w-full min-w-0 rounded-xl border bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#001f3f] focus:ring-2 focus:ring-[#001f3f]/10 ${ticketErrors[field] ? 'border-red-300' : 'border-slate-300'}`;
 
     return (
 
@@ -93,13 +122,13 @@ export const Footer = () => {
                             A premium vehicle marketplace for verified deals, instant inquiries, and modern ownership transitions.
                         </p>
                         <div className="mt-5 space-y-2.5 text-sm text-slate-600">
-                            <a href="tel:+911234567890" className="flex items-center gap-2 hover:text-[#002040]">
-                                <Phone size={14} className="shrink-0 text-[#001f3f]" /> +91 12345 67890
+                            <a href={COMPANY_CONTACT.phoneHref} className="flex items-center gap-2 hover:text-[#002040]">
+                                <Phone size={14} className="shrink-0 text-[#001f3f]" /> {COMPANY_CONTACT.phone}
                             </a>
-                            <a href="mailto:support@vehiclehub.com" className="flex items-center gap-2 hover:text-[#002040]">
-                                <Mail size={14} className="shrink-0 text-[#001f3f]" /> support@vehiclehub.com
+                            <a href={`mailto:${COMPANY_CONTACT.email}`} className="flex items-center gap-2 break-all hover:text-[#002040]">
+                                <Mail size={14} className="shrink-0 text-[#001f3f]" /> {COMPANY_CONTACT.email}
                             </a>
-                            <p className="flex items-center gap-2 text-slate-600"><MapPin size={14} className="shrink-0 text-[#001f3f]" /> Gurugram, Haryana, India</p>
+                            <p className="flex items-start gap-2 text-slate-600"><MapPin size={14} className="mt-1 shrink-0 text-[#001f3f]" /> {COMPANY_CONTACT.address}</p>
                         </div>
                         <div className="mt-5 flex flex-wrap gap-2">
                             {socialLinks.map((social) => {
@@ -129,20 +158,63 @@ export const Footer = () => {
                     </div>
 
                     <div>
-                        <h4 className="mb-4 font-semibold text-slate-900">Stay ahead</h4>
-                        <p className="mb-4 text-sm text-slate-600">Get new listings and price drops in your inbox.</p>
-                        <form onSubmit={handleSubscribe} className="flex items-center gap-2">
-                            <input
-                                type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                                className="w-full min-w-0 rounded-full border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-[#001f3f]"
-                                placeholder="Email address"
-                            />
-                            <button type="submit" className="shrink-0 rounded-full bg-[#001f3f] p-3 text-white hover:bg-[#002a55]" aria-label="Subscribe">
-                                <ArrowRight size={18} />
+                        <h4 className="mb-4 font-semibold text-slate-900">Raise a Ticket</h4>
+                        <p className="mb-4 text-sm text-slate-600">Have a question or an issue? Send us a ticket and our team will get back to you.</p>
+                        {!ticketOpen ? (
+                            <button
+                                type="button"
+                                onClick={() => setTicketOpen(true)}
+                                aria-expanded="false"
+                                className="flex w-full items-center justify-center gap-2 rounded-full bg-[#001f3f] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#002a55]"
+                            >
+                                <TicketCheck size={16} /> Raise a Ticket <ChevronDown size={15} />
                             </button>
-                        </form>
-                        {subscribed && (
-                            <p className="mt-2 flex items-center gap-1.5 text-xs text-emerald-600">Subscribed! Check your inbox.</p>
+                        ) : (
+                            <div className="animate-fadeInUp">
+                            {ticketStatus?.type === 'success' ? (
+                                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3.5">
+                                    <p className="flex items-start gap-2 text-sm text-emerald-800">
+                                        <CheckCircle2 size={16} className="mt-0.5 shrink-0" /> {ticketStatus.text}
+                                    </p>
+                                    <div className="mt-2 flex items-center gap-4">
+                                        <button type="button" onClick={() => setTicketStatus(null)} className="text-xs font-semibold text-[#001f3f] hover:underline">
+                                            Raise another ticket
+                                        </button>
+                                        <button type="button" onClick={() => { setTicketStatus(null); setTicketOpen(false); }} className="text-xs font-medium text-slate-500 hover:text-slate-700">
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <form onSubmit={handleTicketSubmit} noValidate className="space-y-2.5">
+                                    {/* hidden from people — spam bots fill it in */}
+                                    <input type="text" name="website" value={ticket.website} onChange={onTicketChange} tabIndex={-1} autoComplete="off" aria-hidden="true" className="hidden" />
+                                    <div>
+                                        <input name="name" value={ticket.name} onChange={onTicketChange} placeholder="Your name" autoComplete="name" aria-label="Your name" aria-invalid={!!ticketErrors.name} className={ticketInput('name')} />
+                                        {ticketErrors.name && <p className="mt-1 text-xs text-red-600">{ticketErrors.name}</p>}
+                                    </div>
+                                    <div>
+                                        <input name="email" type="email" value={ticket.email} onChange={onTicketChange} placeholder="Email address" autoComplete="email" aria-label="Email address" aria-invalid={!!ticketErrors.email} className={ticketInput('email')} />
+                                        {ticketErrors.email && <p className="mt-1 text-xs text-red-600">{ticketErrors.email}</p>}
+                                    </div>
+                                    <div>
+                                        <textarea name="message" rows={3} value={ticket.message} onChange={onTicketChange} placeholder="How can we help?" aria-label="Message" aria-invalid={!!ticketErrors.message} className={`${ticketInput('message')} resize-none`} />
+                                        {ticketErrors.message && <p className="mt-1 text-xs text-red-600">{ticketErrors.message}</p>}
+                                    </div>
+                                    {ticketStatus?.type === 'error' && (
+                                        <p className="flex items-start gap-1.5 text-xs text-red-600"><AlertCircle size={14} className="mt-px shrink-0" /> {ticketStatus.text}</p>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                        <button type="button" onClick={() => { setTicketOpen(false); setTicketErrors({}); if (ticketStatus?.type === 'error') setTicketStatus(null); }} className="shrink-0 rounded-full border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+                                            Cancel
+                                        </button>
+                                    <button type="submit" disabled={sendingTicket} className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#001f3f] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#002a55] disabled:cursor-not-allowed disabled:opacity-60">
+                                        {sendingTicket ? <><Loader2 size={15} className="animate-spin" /> Sending...</> : <><Send size={15} /> Submit ticket</>}
+                                    </button>
+                                    </div>
+                                </form>
+                            )}
+                            </div>
                         )}
                         <div className="mt-6">
                             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Popular cities</p>
