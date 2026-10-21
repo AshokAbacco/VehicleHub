@@ -17,6 +17,10 @@ import { VehicleDetailPage } from './pages/public/VehicleDetailPage.jsx';
 import { SellerRegistration } from './pages/public/SellerRegistrationPage.jsx';
 import { AboutPage } from './pages/public/AboutPage.jsx';
 import { PricingPage } from './pages/public/PricingPage.jsx';
+import { InspectionsInfoPage } from './pages/public/inspections.jsx';
+import { FaqPage } from './pages/public/FaqPage.jsx';
+import { TermsPage } from './pages/public/TermsPage.jsx';
+import { ScrollToTop } from './components/layout/ScrollToTop.jsx';
 import { ContactPage } from './pages/public/ContactPage.jsx';
 import { ComparePage } from './pages/public/ComparePage.jsx';
 import { WishlistPage } from './pages/public/WishlistPage.jsx';
@@ -126,6 +130,12 @@ const MainLayout = () => {
         <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
         <Route path="/seller-Register" element={<SellerRegistration />} />
         <Route path="/pricing" element={<PricingPage />} />
+        {/* "How inspections work" (footer link) */}
+        <Route path="/inspection" element={<InspectionsInfoPage />} />
+        <Route path="/inspections" element={<InspectionsInfoPage />} />
+        <Route path="/faq" element={<FaqPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/terms-and-conditions" element={<TermsPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<ContactPage />} />
 
@@ -203,6 +213,8 @@ function App() {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <BrowserRouter>
+              {/* every page opens at the top */}
+              <ScrollToTop />
               <AuthGateProvider>
                 {/* zIndex above all modals (they use z-[9999]) so alerts are never hidden behind a popup */}
                 <Toaster position="top-right" containerStyle={{ zIndex: 2147483647 }} />

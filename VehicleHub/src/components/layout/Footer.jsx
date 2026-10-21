@@ -47,7 +47,7 @@ const socialLinks = [
 
 const quickLinks = [
     { to: '/search', label: 'Browse vehicles' },
-    { to: '/sell', label: 'Sell your vehicle' },
+    { to: '/pricing', label: 'Sell your vehicle' },
     { to: '/about', label: 'About us' },
     { to: '/contact', label: 'Contact' },
 ];
@@ -55,15 +55,14 @@ const quickLinks = [
 const supportLinks = [
     { to: '/faq', label: 'Help center / FAQ' },
     { to: '/inspection', label: 'How inspections work' },
-    { to: '/report', label: 'Report a listing' },
+    { to: '/terms', label: 'Terms & Conditions' },
 ];
 
 const legalLinks = [
     { to: '/privacy', label: 'Privacy Policy' },
-    { to: '/terms', label: 'Terms of Service' },
+    { to: '/terms', label: 'Terms & Conditions' },
 ];
 
-const popularCities = ['Mumbai', 'Delhi NCR', 'Bengaluru', 'Pune', 'Hyderabad', 'Chennai'];
 
 export const Footer = () => {
     const location = useLocation();
@@ -216,17 +215,6 @@ export const Footer = () => {
                             )}
                             </div>
                         )}
-                        <div className="mt-6">
-                            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Popular cities</p>
-                            <div className="flex flex-wrap gap-2">
-                                {popularCities.map((city) => (
-                                    <Link key={city} to={`/search?location=${encodeURIComponent(city)}`}
-                                        className="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-[#001f3f] hover:text-[#001f3f]">
-                                        {city}
-                                    </Link>
-                                ))}
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
