@@ -1,7 +1,9 @@
+// VehicleHub/VehicleHub/src/components/cards/VehicleCard.jsx
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, ShieldCheck } from 'lucide-react';
+import { Heart, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters.js';
+import { isUnverifiedListing, VERIFIED_BADGE_URL } from '../../utils/listingVerification.js';
 import { fallbackVehicleImage } from '../../data/catalogData.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useAuthGate } from '../../context/AuthGateContext.jsx';
@@ -14,6 +16,7 @@ export const VehicleCard = ({ vehicle }) => {
     const wishlistItems = wishlistData?.data || wishlistData || [];
     const remoteWishlisted = useMemo(() => wishlistItems.some((item) => (item.vehicleListingId || item.vehicleListing?.id) === vehicle.id), [wishlistItems, vehicle.id]);
     const [wishlistedOverride, setWishlistedOverride] = useState(null);
+    const [badgeFailed, setBadgeFailed] = useState(false); // show the text badge if the image can't load
     const [addToWishlist] = useAddToWishlistMutation();
     const [removeFromWishlist] = useRemoveFromWishlistMutation();
     const tags = [vehicle.fuelType, vehicle.transmission].filter(Boolean);
@@ -112,9 +115,28 @@ export const VehicleCard = ({ vehicle }) => {
                         <p className="text-[10px] text-slate-400">Expected price</p>
                         <p className="truncate text-base font-bold text-slate-900">{formatCurrency(vehicle.price)}</p>
                     </div>
-                    <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-emerald-600">
-                        <ShieldCheck size={11} /> Verified
-                    </span>
+                    {isUnverifiedListing(vehicle) ? (
+                        <span
+                            title="Published by the seller without VehicleHub verification"
+                            className="flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200"
+                        >
+                            <ShieldAlert size={11} /> Unverified
+                        </span>
+                    ) : badgeFailed ? (
+                        <span className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-emerald-600">
+                            <ShieldCheck size={11} /> Verified
+                        </span>
+                    ) : (
+                        <img
+                            src={VERIFIED_BADGE_URL}
+                            alt="MotorDesk Verified"
+                            title="Verified by MotorDesk"
+                            loading="lazy"
+                            decoding="async"
+                            onError={() => setBadgeFailed(true)}
+                            className="h-9 w-auto max-w-[96px] shrink-0 object-contain"
+                        />
+                    )}
                 </div>
 
                 <Link

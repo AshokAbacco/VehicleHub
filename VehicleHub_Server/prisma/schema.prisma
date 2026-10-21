@@ -32,6 +32,14 @@ enum VehicleStatus {
   ARCHIVED
 }
 
+// Seller's choice on the upload form:
+//   VERIFY     -> admin review first (the normal approval process), then live as Verified
+//   UNVERIFIED -> live straight away, shown to buyers with an "Unverified" badge
+enum VehicleVerificationOption {
+  VERIFY
+  UNVERIFIED
+}
+
 enum InquiryStatus {
   PENDING
   ACCEPTED
@@ -436,16 +444,17 @@ model Vehicle {
   keylessEntry   Boolean  @default(false)
 
   // STATUS / APPROVAL WORKFLOW
-  status       VehicleStatus @default(PENDING)
-  isFeatured   Boolean       @default(false)
-  isApproved   Boolean       @default(false)
-  isVerified   Boolean       @default(false)
-  views        Int           @default(0)
-  favorites    Int           @default(0)
-  rejectReason String?
-  publishedAt  DateTime?
-  soldAt       DateTime?
-  soldPrice    Float?
+  status             VehicleStatus             @default(PENDING)
+  isFeatured         Boolean                   @default(false)
+  isApproved         Boolean                   @default(false)
+  isVerified         Boolean                   @default(false)
+  verificationOption VehicleVerificationOption @default(VERIFY)
+  views              Int                       @default(0)
+  favorites          Int                       @default(0)
+  rejectReason       String?
+  publishedAt        DateTime?
+  soldAt             DateTime?
+  soldPrice          Float?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

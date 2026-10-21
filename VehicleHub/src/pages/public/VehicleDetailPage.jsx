@@ -5,10 +5,11 @@ import { Helmet } from 'react-helmet-async';
 import {
     CheckCircle2, ChevronRight, ShieldCheck, Sparkles, Truck,
     ChevronLeft, Share2, Heart, MapPin, CalendarDays, Fuel, Gauge, EyeOff,
-    Settings2, Palette, FileText, Home, Eye, Phone, Loader2, Clock, XCircle, AlertTriangle, ShoppingBag, Zap, Send, Check,
+    Settings2, Palette, FileText, Home, Eye, Phone, Loader2, Clock, XCircle, AlertTriangle, ShoppingBag, Zap, Send, Check, ShieldAlert,
 } from 'lucide-react';
 import { useGetVehicleByIdQuery } from '../../services/vehicleApiSlice.js';
 import { formatCurrency } from '../../utils/formatters.js';
+import { isUnverifiedListing } from '../../utils/listingVerification.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useAuthGate } from '../../context/AuthGateContext.jsx';
 import { useGetWishlistQuery, useAddToWishlistMutation, useRemoveFromWishlistMutation, useGetMyPurchaseRequestsQuery } from '../../services/buyerApiSlice.js';
@@ -147,7 +148,8 @@ export const VehicleDetailPage = () => {
 
     // Not approved: only the owning seller or an admin should ever land here (e.g. previewing their own listing).
     // Show a clear "not live yet" banner instead of the full public page.
-    if (!isPubliclyVisible && !isOwner && user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN') {
+    // (session roles are lowercase — "admin")
+    if (!isPubliclyVisible && !isOwner && String(user?.role || '').toLowerCase() !== 'admin') {
         const meta = statusMeta[status] || statusMeta.PENDING;
         const StatusIcon = meta.icon;
         return (
@@ -305,6 +307,15 @@ export const VehicleDetailPage = () => {
                                     {status}
                                 </span>
                             )}
+                            {isUnverifiedListing(vehicle) && (
+                                <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-800">
+                                    <ShieldAlert size={17} className="mt-0.5 shrink-0" />
+                                    <div className="text-xs leading-5 sm:text-sm">
+                                        <span className="font-bold">Unverified listing.</span> The seller published this vehicle without VehicleHub
+                                        verification. Please inspect the vehicle and check its documents before paying.
+                                    </div>
+                                </div>
+                            )}
                             <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{vehicle.title}</h1>
                             {vehicle.variant && <p className="mt-1 text-sm text-slate-500">{vehicle.brand} {vehicle.model} · {vehicle.variant}</p>}
 
@@ -382,7 +393,7 @@ export const VehicleDetailPage = () => {
                         {/* Trust badges */}
                         <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
                             <div className="mb-3 flex items-center gap-2 text-[#001f3f]">
-                                <ShieldCheck size={16} /> <span className="text-base font-bold">Verified documents & trust</span>
+                                <ShieldCheck size={16} /> <span className="text-base font-bold">{isUnverifiedListing(vehicle) ? 'Documents & trust (seller provided)' : 'Verified documents & trust'}</span>
                             </div>
                             <div className="grid gap-2 sm:grid-cols-3">
                                 {[

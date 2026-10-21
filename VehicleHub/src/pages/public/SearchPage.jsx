@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/pages/public/SearchPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
@@ -282,7 +283,7 @@ export const SearchPage = () => {
             <div className="border-b border-slate-200 bg-white">
                 <div className="mx-auto max-w-7xl px-4 py-5 lg:px-8">
                     <h1 className="text-xl font-extrabold text-slate-900 sm:text-2xl">Find your ideal vehicle</h1>
-                    <p className="mt-0.5 text-sm text-slate-500">{loading ? "Loading listings..." : `${vehicles.length} verified vehicles available`}</p>
+                    <p className="mt-0.5 text-sm text-slate-500">{loading ? "Loading listings..." : `${vehicles.length} vehicles available`}</p>
 
                     {/* Top search bar */}
                     <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">

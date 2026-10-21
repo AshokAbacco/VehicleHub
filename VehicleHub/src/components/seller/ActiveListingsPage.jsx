@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/components/seller/ActiveListingsPage.jsx
 import { useMemo, useState } from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { GenericTablePage } from '../../components/seller/GenericTablePage.jsx';
@@ -6,6 +7,7 @@ import { useGetSellerInventoryQuery, useDeleteMyVehicleMutation } from '../../se
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatCurrency } from '../../utils/formatters.js';
 import { toast } from 'react-hot-toast';
+import { isUnverifiedListing } from '../../utils/listingVerification.js';
 
 export const ActiveListingsPage = () => {
     const { user } = useAuth();
@@ -29,8 +31,10 @@ export const ActiveListingsPage = () => {
         try {
             await deleteMyVehicle(row.id).unwrap();
             toast.success('Listing deleted');
+            return true;
         } catch (err) {
             toast.error(err?.data?.message || 'Failed to delete listing');
+            return false;
         }
     };
 
@@ -83,7 +87,7 @@ export const ActiveListingsPage = () => {
                                             ? 'bg-blue-50 text-blue-600 border-blue-200'
                                             : 'bg-amber-50 text-amber-600 border border-amber-200'
                                     }`}>
-                                    {isApproved ? 'Approved' : isRejected ? 'Rejected' : isUnderVerification ? 'Under verification' : 'Pending'}
+                                    {isApproved ? (isUnverifiedListing(r) ? 'Live · Unverified' : 'Approved') : isRejected ? 'Rejected' : isUnderVerification ? 'Under verification' : 'Pending'}
                                 </span>
                             );
                         },

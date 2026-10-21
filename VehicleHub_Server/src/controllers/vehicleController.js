@@ -236,6 +236,8 @@ export const createVehicle = async (req, res, next) => {
     const isAdmin = isAdminUser(req.user);
     // Admin "Add Vehicle" form: publish now (default) or keep as a draft
     const adminPublish = b.publishImmediately === undefined || toBool(b.publishImmediately);
+    // Seller / dealer upload form: "Verify Vehicle" (admin review, default) or "Unverified Vehicle" (live now)
+    const unverified = !isAdmin && String(b.verificationOption || "").toUpperCase() === "UNVERIFIED";
     const now = new Date();
     const payload = {
       ...data,
@@ -248,11 +250,14 @@ export const createVehicle = async (req, res, next) => {
       thumbnail: imageUrls[0],
       documentImages: [rcFrontUrl, insuranceDocumentUrl].filter(Boolean),
       // Seller listings wait for admin approval; a listing added by the admin is live right away
+      // Unverified seller listings go live now (no admin review) and are flagged for buyers
       ...(isAdmin
         ? adminPublish
           ? { status: "AVAILABLE", isApproved: true, isVerified: true, publishedAt: now, isFeatured: toBool(b.isFeatured) }
           : { status: "DRAFT", isApproved: false }
-        : { status: "PENDING", isApproved: false }),
+        : unverified
+          ? { status: "AVAILABLE", isApproved: true, isVerified: false, publishedAt: now, verificationOption: "UNVERIFIED" }
+          : { status: "PENDING", isApproved: false, verificationOption: "VERIFY" }),
     };
     Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k]);
 
@@ -262,22 +267,24 @@ export const createVehicle = async (req, res, next) => {
         vehicleId: vehicle.id,
         fromStatus: null,
         toStatus: vehicle.status,
-        reason: isAdmin ? "Listed by admin" : "Listing submitted",
+        reason: isAdmin ? "Listed by admin" : unverified ? "Published by seller as an unverified listing" : "Listing submitted",
         changedById: req.user.id,
       },
     });
 
     if (!isAdmin) {
-      // Let the admins know there is something to review
+      // Let the admins know there is something to review (or, for unverified listings, that it went live)
       const admins = await prisma.user.findMany({ where: { role: "ADMIN", isActive: true }, select: { id: true } });
       if (admins.length) {
         await prisma.notification.createMany({
           data: admins.map((a) => ({
             userId: a.id,
             type: "SYSTEM_ALERT",
-            title: "New vehicle awaiting approval",
-            message: `${vehicle.title} was submitted for review.`,
-            metadata: { vehicleId: vehicle.id, kind: "vehicle_submitted" },
+            title: unverified ? "Unverified vehicle published" : "New vehicle awaiting approval",
+            message: unverified
+              ? `${vehicle.title} was published by the seller without verification.`
+              : `${vehicle.title} was submitted for review.`,
+            metadata: { vehicleId: vehicle.id, kind: unverified ? "vehicle_published_unverified" : "vehicle_submitted" },
           })),
         });
       }
@@ -285,7 +292,9 @@ export const createVehicle = async (req, res, next) => {
 
     sendSuccess(
       res,
-      isAdmin ? (adminPublish ? "Vehicle added and published" : "Vehicle saved as a draft") : "Vehicle submitted for admin approval",
+      isAdmin
+        ? adminPublish ? "Vehicle added and published" : "Vehicle saved as a draft"
+        : unverified ? "Vehicle published as an unverified listing" : "Vehicle submitted for admin approval",
       toVehicleDTO(vehicle),
       201,
     );
@@ -340,8 +349,11 @@ export const updateVehicle = async (req, res, next) => {
       data.documentImages = [...(keptDocs ?? existing.documentImages ?? []), ...newDocs];
     }
 
-    // A seller's edit to a draft, live or rejected listing goes (back) to admin review
-    const backToReview = !isAdmin && ["DRAFT", "AVAILABLE", "APPROVED", "REJECTED"].includes(existing.status);
+    // A seller's edit to a draft, live or rejected listing goes (back) to admin review —
+    // except a live "Unverified" listing, which never needed admin review and stays live
+    const liveUnverified =
+      existing.verificationOption === "UNVERIFIED" && !existing.isVerified && ["AVAILABLE", "APPROVED"].includes(existing.status);
+    const backToReview = !isAdmin && !liveUnverified && ["DRAFT", "AVAILABLE", "APPROVED", "REJECTED"].includes(existing.status);
     if (backToReview) {
       data.status = "PENDING";
       data.isApproved = false;

@@ -11,6 +11,7 @@ import { VehicleDetailModal } from '../../components/admin/VehicleDetailModal.js
 import { AdminConfirmDeleteModal } from '../../components/admin/AdminConfirmDeleteModal.jsx';
 import { AdminLoading, AdminError, AdminEmpty } from './AdminState.jsx';
 import { formatINR } from '../../utils/formatCurrency.js';
+import { isUnverifiedListing } from '../../utils/listingVerification.js';
 
 const statusColors = {
     live: 'bg-emerald-100 text-emerald-700',
@@ -107,7 +108,14 @@ export const AllVehiclesPage = () => {
                                     <td className="px-5 py-3.5 text-slate-600">{v.category || '—'}</td>
                                     <td className="px-5 py-3.5 font-semibold text-slate-900">{formatINR(v.price)}</td>
                                     <td className="px-5 py-3.5 text-slate-500">{v.views ?? 0}</td>
-                                    <td className="px-5 py-3.5"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${statusColors[v.status] || statusColors.draft}`}>{v.status}</span></td>
+                                    <td className="px-5 py-3.5">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${statusColors[v.status] || statusColors.draft}`}>{v.status}</span>
+                                            {isUnverifiedListing(v) && (
+                                                <span title="Published by the seller without admin verification" className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200">Unverified</span>
+                                            )}
+                                        </div>
+                                    </td>
                                     <td className="px-5 py-3.5">
                                         <div className="flex items-center gap-1.5">
                                             <button onClick={() => setViewing(v)} title="View details" className="rounded-full p-1.5 text-slate-400 hover:bg-[#e6f2ff] hover:text-[#001f3f]"><Eye size={15} /></button>

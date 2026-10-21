@@ -16,6 +16,9 @@ import {
     Image as ImageIcon,
     AlignLeft,
     Images,
+    ShieldCheck,
+    ShieldAlert,
+    BadgeCheck,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useCreateVehicleMutation, useGetMySellerStatusQuery, useGetMyProfileQuery } from "../../services/sellerApiSlice";
@@ -71,7 +74,28 @@ const initialForm = {
     images: [],       // array of { file, preview }  — multi-upload vehicle photos
     documents: {},     // { rcFront: { file, preview }, insuranceDocument: { file, preview } }
     description: '',
+    verificationOption: 'VERIFY', // 'VERIFY' = admin review first | 'UNVERIFIED' = publish now with an Unverified badge
 };
+
+// The two choices at the bottom of the upload form
+const VERIFICATION_OPTIONS = [
+    {
+        value: 'VERIFY',
+        title: 'Verify Vehicle',
+        icon: ShieldCheck,
+        text: 'Sent to the admin team for review. Goes live with a Verified badge once approved.',
+        active: 'border-emerald-500 bg-emerald-50',
+        iconActive: 'bg-emerald-500 text-white',
+    },
+    {
+        value: 'UNVERIFIED',
+        title: 'Unverified Vehicle',
+        icon: ShieldAlert,
+        text: 'Published right away without admin review. Buyers see an Unverified badge on the listing.',
+        active: 'border-amber-500 bg-amber-50',
+        iconActive: 'bg-amber-500 text-white',
+    },
+];
 
 const Field = ({ label, required, children, hint }) => (
     <div>
@@ -338,7 +362,7 @@ export const AddVehicleForm = () => {
                 'engineCondition', 'tyreCondition', 'batteryCondition',
                 'sellerName', 'mobileNumber', 'email', 'sellerType', 'dealerName',
                 'country', 'state', 'city', 'area', 'pincode',
-                'description',
+                'description', 'verificationOption',
             ];
 
             simpleFields.forEach((key) => {
@@ -714,6 +738,44 @@ export const AddVehicleForm = () => {
                             />
                         </Field>
                     </div>
+
+                    {/* Verify (admin review) or Unverified (publish now) */}
+                    <div>
+                        <SectionHeading icon={BadgeCheck} title="Listing Verification" subtitle="Choose how this vehicle is published" />
+                        <div role="radiogroup" aria-label="Listing verification" className="grid gap-3 sm:grid-cols-2">
+                            {VERIFICATION_OPTIONS.map((opt) => {
+                                const selected = form.verificationOption === opt.value;
+                                const Icon = opt.icon;
+                                return (
+                                    <label
+                                        key={opt.value}
+                                        className={`flex cursor-pointer items-start gap-3 rounded-2xl border-2 p-4 transition ${selected ? opt.active : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="verificationOption"
+                                            value={opt.value}
+                                            checked={selected}
+                                            onChange={() => set('verificationOption', opt.value)}
+                                            className="sr-only"
+                                        />
+                                        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition ${selected ? opt.iconActive : 'bg-slate-100 text-slate-500'}`}>
+                                            <Icon size={19} />
+                                        </span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="flex items-center justify-between gap-2">
+                                                <span className="text-sm font-bold text-slate-900">{opt.title}</span>
+                                                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${selected ? 'border-[#001f3f] bg-[#001f3f] text-white' : 'border-slate-300'}`}>
+                                                    {selected && <Check size={12} />}
+                                                </span>
+                                            </span>
+                                            <span className="mt-1 block text-xs leading-5 text-slate-500">{opt.text}</span>
+                                        </span>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -745,7 +807,7 @@ export const AddVehicleForm = () => {
                         disabled={submitting}
                         className="flex items-center gap-1.5 rounded-xl bg-[#001f3f] px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-[#001f3f]/20 transition hover:-translate-y-0.5 hover:bg-[#002a55] hover:shadow-lg disabled:opacity-60"
                     >
-                        {submitting ? 'Submitting...' : 'Submit for Approval'}
+                        {submitting ? 'Submitting...' : form.verificationOption === 'UNVERIFIED' ? 'Publish Now' : 'Submit for Approval'}
                         {!submitting && <Check size={15} />}
                     </button>
                 )}
