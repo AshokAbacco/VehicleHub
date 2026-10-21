@@ -444,17 +444,17 @@ model Vehicle {
   keylessEntry   Boolean  @default(false)
 
   // STATUS / APPROVAL WORKFLOW
-  status             VehicleStatus             @default(PENDING)
-  isFeatured         Boolean                   @default(false)
-  isApproved         Boolean                   @default(false)
-  isVerified         Boolean                   @default(false)
+  status       VehicleStatus @default(PENDING)
+  isFeatured   Boolean       @default(false)
+  isApproved   Boolean       @default(false)
+  isVerified   Boolean       @default(false)
   verificationOption VehicleVerificationOption @default(VERIFY)
-  views              Int                       @default(0)
-  favorites          Int                       @default(0)
-  rejectReason       String?
-  publishedAt        DateTime?
-  soldAt             DateTime?
-  soldPrice          Float?
+  views        Int           @default(0)
+  favorites    Int           @default(0)
+  rejectReason String?
+  publishedAt  DateTime?
+  soldAt       DateTime?
+  soldPrice    Float?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -736,6 +736,56 @@ model Loan {
   approvedBy   String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+}
+
+// Pricing page plan purchases (Premium, Urban / Rural, 1-12 months).
+// A row is written only after the backend has verified the Razorpay payment, so every row is
+// a completed payment. razorpayOrderId / razorpayPaymentId are unique — one row per transaction.
+enum SubscriptionLocation {
+  URBAN
+  RURAL
+}
+
+// Invoice email for a plan payment: PENDING (not sent yet) -> SENDING -> SENT, or FAILED (retried)
+enum InvoiceEmailStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+model SubscriptionPayment {
+  id                String               @id @default(cuid())
+  shopName          String
+  fullName          String
+  phone             String
+  email             String
+  plan              String // "PREMIUM"
+  locationCategory  SubscriptionLocation
+  durationMonths    Int // 1, 3, 6 or 12
+  amount            Float // rupees paid
+  currency          String               @default("INR")
+  razorpayOrderId   String               @unique
+  razorpayPaymentId String               @unique
+  status            PaymentStatus        @default(SUCCESS)
+  paidAt            DateTime             @default(now())
+  userId            String? // signed-in account that paid, if any
+  sellerProfileId   String? // set when the seller registration is submitted
+
+  // Invoice (emailed once, after the payment is verified)
+  invoiceSeq              Int                @unique @default(autoincrement()) // -> MD-INV-000001
+  invoiceNumber           String?            @unique
+  invoiceEmailStatus      InvoiceEmailStatus @default(PENDING)
+  invoiceEmailAttempts    Int                @default(0)
+  invoiceEmailError       String?
+  invoiceEmailLastTriedAt DateTime?
+  invoiceSentAt           DateTime?
+
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([email])
+  @@index([phone])
 }
 
 model Payment {

@@ -16,6 +16,7 @@ import { SearchPage } from './pages/public/SearchPage.jsx';
 import { VehicleDetailPage } from './pages/public/VehicleDetailPage.jsx';
 import { SellerRegistration } from './pages/public/SellerRegistrationPage.jsx';
 import { AboutPage } from './pages/public/AboutPage.jsx';
+import { PricingPage } from './pages/public/PricingPage.jsx';
 import { ContactPage } from './pages/public/ContactPage.jsx';
 import { ComparePage } from './pages/public/ComparePage.jsx';
 import { WishlistPage } from './pages/public/WishlistPage.jsx';
@@ -124,6 +125,7 @@ const MainLayout = () => {
         <Route path="/vehicle/:id" element={<VehicleDetailPage />} />
         <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
         <Route path="/seller-Register" element={<SellerRegistration />} />
+        <Route path="/pricing" element={<PricingPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/contact" element={<ContactPage />} />
 

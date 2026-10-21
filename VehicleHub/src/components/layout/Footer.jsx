@@ -233,7 +233,7 @@ export const Footer = () => {
 
             <div className="border-t border-slate-100">
                 <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between lg:px-8">
-                    <p>© {new Date().getFullYear()} VehicleHub. All rights reserved.</p>
+                    <p>© {new Date().getFullYear()} Motor Desk. All rights reserved.</p>
                     <div className="flex flex-wrap items-center gap-4">
                         {legalLinks.map((link) => <Link key={link.to} to={link.to} className="hover:text-slate-700">{link.label}</Link>)}
                     </div>

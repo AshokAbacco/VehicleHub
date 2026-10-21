@@ -14,6 +14,7 @@ import { storeUpload, deleteStoredFiles } from "../utils/storeUpload.js";
 import { normalizePhone, normalizeWhatsApp } from "../utils/phone.js";
 import bcrypt from "bcryptjs";
 import { generateAccessToken } from "../utils/generateToken.js";
+import { queueRegistrationEmails } from "../services/registrationEmails.js";
 import { SELLING_ROLES, roleForSellerType, listingAllowance, accountTypeLabel } from "../utils/sellerAccount.js";
 
 // ============================================================
@@ -42,6 +43,8 @@ const sellerRegistrationSchema = z.object({
   // WhatsApp: "true" = the phone number above is also WhatsApp; otherwise an optional other number
   whatsappSameAsPhone: z.union([z.boolean(), z.string()]).optional().nullable(),
   whatsappNumber: z.string().optional().nullable(),
+  // Pricing page: the verified plan payment this application continues from (optional)
+  subscriptionPaymentId: z.string().max(64).optional().nullable(),
 }).superRefine((d, ctx) => {
   // A dealer account is a shop — it needs the shop / business name
   if (d.sellerType === "Dealer" && !String(d.businessName || "").trim()) {
@@ -106,8 +109,8 @@ export const registerSeller = async (req, res) => {
     let newAccount = null;
     if (isGuest) {
       const password = String(req.body?.password || "");
-      if (password.length < 8) {
-        return res.status(400).json({ message: "Please check the highlighted fields.", errors: { password: ["Password must be at least 8 characters"] } });
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Please check the highlighted fields.", errors: { password: ["Password must be at least 6 characters"] } });
       }
       const email = String(data.email).trim().toLowerCase();
       const phone = normalizePhone(data.phone);
@@ -184,6 +187,15 @@ export const registerSeller = async (req, res) => {
         ? await tx.sellerProfile.update({ where: { id: existing.id }, data: profileData })
         : await tx.sellerProfile.create({ data: { userId, ...profileData } });
 
+      // Plan bought on the Pricing page -> attach it to this application (only a verified,
+      // not-yet-used payment; nothing happens if the id is wrong or already linked)
+      if (data.subscriptionPaymentId) {
+        await tx.subscriptionPayment.updateMany({
+          where: { id: data.subscriptionPaymentId, status: "SUCCESS", sellerProfileId: null },
+          data: { sellerProfileId: profile.id, userId: userId },
+        });
+      }
+
       const docs = [
         [panCardUrl, "PAN_CARD"],
         [gstCertUrl, "GST_CERTIFICATE"],
@@ -232,6 +244,10 @@ export const registerSeller = async (req, res) => {
 
       return profile;
     });
+
+    // Saved -> welcome email to the client + approval email to the admin (MS_SMTP_USER).
+    // In the background: an email problem never fails or repeats the registration.
+    queueRegistrationEmails({ sellerProfileId: result.id, userId, resubmitted: Boolean(existing) });
 
     return res.status(201).json({
       success: true,

@@ -5,7 +5,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
     Search, Heart, User, Plus, MapPin, ChevronDown, Menu, X,
     Bell, FileText, ClipboardList, ShoppingCart,
-    HelpCircle, Settings, LogOut, Pencil, LayoutDashboard,
+    HelpCircle, Settings, LogOut, Pencil, LayoutDashboard, Crown,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useAuthGate } from "../../context/AuthGateContext.jsx";
@@ -362,6 +362,15 @@ export const Navbar = () => {
                             {cat.label}
                         </Link>
                     ))}
+                    <Link
+                        to="/pricing"
+                        aria-current={location.pathname === "/pricing" ? "page" : undefined}
+                        className={`ml-auto flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-all duration-150 active:scale-95 ${location.pathname === "/pricing"
+                            ? "border-[#001f3f] bg-[#001f3f] text-white"
+                            : "border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-400 hover:bg-amber-100"}`}
+                    >
+                        <Crown size={14} /> Pricing
+                    </Link>
                 </div>
             </div>
 
@@ -384,6 +393,15 @@ export const Navbar = () => {
                                 {cat.label}
                             </Link>
                         ))}
+                        <Link
+                            to="/pricing"
+                            aria-current={location.pathname === "/pricing" ? "page" : undefined}
+                            className={`flex items-center gap-1 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition active:scale-95 ${location.pathname === "/pricing"
+                                ? "border-[#001f3f] bg-[#001f3f] text-white"
+                                : "border-amber-300 bg-amber-50 text-amber-800"}`}
+                        >
+                            <Crown size={12} /> Pricing
+                        </Link>
                     </div>
 
                     <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">

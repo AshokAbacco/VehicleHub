@@ -19,6 +19,7 @@ import buyerRoutes from "./buyerRoutes.js";
 import adminRoutes from "./adminRoutes.js";
 import fieldInspectorRoutes from "./fieldInspectorRoutes.js";
 import conversationRoutes from "./conversationRoutes.js";
+import pricingRoutes from "./pricingRoutes.js";
 
 const router = express.Router();
 
@@ -41,5 +42,6 @@ router.use("/buyer", buyerRoutes); // buyer panel + purchase requests
 router.use("/admin", adminRoutes); // admin panel
 router.use("/field-inspector", fieldInspectorRoutes); // field inspector panel
 router.use("/conversations", conversationRoutes); // the signed-in user's own chats
+router.use("/pricing", pricingRoutes); // Pricing page: Premium plan + Razorpay
 
 export default router;

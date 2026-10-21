@@ -1,11 +1,11 @@
 // VehicleHub/VehicleHub/src/pages/public/SellerRegistrationPage.jsx
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { toast } from 'react-hot-toast'; // the app renders react-hot-toast's <Toaster>
 import {
     ShieldCheck, Camera, FileText, Home, MapPin, Phone,
-    Building2, CreditCard, Landmark, CheckCircle2, User, Clock, XCircle, Loader2, Search, Lock,
+    Building2, CreditCard, Landmark, CheckCircle2, User, Clock, XCircle, Loader2, Search, Lock, Eye, EyeOff,
 } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -15,6 +15,8 @@ import { fetchSellerStatus, openSellerArea } from "../../utils/sellerStatus.js";
 
 import { useRegisterSellerMutation } from "../../services/sellerApiSlice.js";
 import { isValidWhatsApp } from "../../utils/whatsapp.js";
+import { readPlanPrefill, clearPlanPrefill } from "../../services/pricingApiSlice.js";
+import { formatCurrency } from "../../utils/formatters.js";
 
 const initialFormData = {
 
@@ -44,6 +46,32 @@ const TextInput = (props) => (
     <input {...props} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-[#001f3f] focus:bg-white focus:ring-2 focus:ring-[#001f3f]/10" />
 );
 
+const PASSWORD_MIN = 6;
+
+// Password box with a show / hide (eye) button
+const PasswordInput = ({ invalid, ...props }) => {
+    const [show, setShow] = useState(false);
+    return (
+        <div className="relative">
+            <input
+                {...props}
+                type={show ? 'text' : 'password'}
+                aria-invalid={invalid || undefined}
+                className={`w-full rounded-2xl border bg-slate-50 py-3 pl-4 pr-12 text-sm text-slate-900 outline-none transition focus:bg-white focus:ring-2 focus:ring-[#001f3f]/10 ${invalid ? 'border-red-300 focus:border-red-400' : 'border-slate-200 focus:border-[#001f3f]'}`}
+            />
+            <button
+                type="button"
+                onClick={() => setShow((v) => !v)}
+                aria-label={show ? 'Hide password' : 'Show password'}
+                title={show ? 'Hide password' : 'Show password'}
+                className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            >
+                {show ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
+        </div>
+    );
+};
+
 const FileInput = ({ icon: Icon, name, onChange, fileName }) => (
     <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-[#001f3f]/30">
         <Icon size={18} className="shrink-0 text-slate-500" />
@@ -70,7 +98,21 @@ export const SellerRegistration = () => {
 
     const [registerSeller] = useRegisterSellerMutation();
 
-    const [formData, setFormData] = useState(initialFormData);
+    // Premium plan just paid on the Pricing page -> start with those details (all still editable)
+    const routerLocation = useLocation();
+    const [planPrefill] = useState(() => routerLocation.state?.planPrefill || readPlanPrefill());
+    const [formData, setFormData] = useState(() =>
+        planPrefill
+            ? {
+                ...initialFormData,
+                sellerType: 'Dealer', // the plan is for a shop
+                ownerName: planPrefill.fullName || '',
+                businessName: planPrefill.shopName || '',
+                email: planPrefill.email || '',
+                phone: String(planPrefill.phone || '').replace(/^\+91/, ''),
+            }
+            : initialFormData
+    );
     const [submitting, setSubmitting] = useState(false);
 
     // Application status from the server: undefined = loading, null = never applied,
@@ -93,9 +135,10 @@ export const SellerRegistration = () => {
             if (st?.status === 'REJECTED' && st.sellerProfile) {
                 setFormData((prev) => ({
                     ...prev,
-                    ownerName: st.sellerProfile.ownerName || prev.ownerName,
-                    businessName: st.sellerProfile.businessName || prev.businessName,
-                    sellerType: st.sellerProfile.sellerType === 'DEALER' ? 'Dealer' : 'Individual',
+                    // details from a plan just paid for win over the old application
+                    ownerName: (planPrefill && prev.ownerName) || st.sellerProfile.ownerName || prev.ownerName,
+                    businessName: (planPrefill && prev.businessName) || st.sellerProfile.businessName || prev.businessName,
+                    sellerType: planPrefill ? prev.sellerType : st.sellerProfile.sellerType === 'DEALER' ? 'Dealer' : 'Individual',
                     ...(st.sellerProfile.whatsappNumber && !st.sellerProfile.whatsappSameAsPhone
                         ? { whatsappSameAsPhone: false, whatsappNumber: st.sellerProfile.whatsappNumber }
                         : {}),
@@ -124,8 +167,8 @@ export const SellerRegistration = () => {
         // Visitors without an account create their login with the application
         const isGuest = !user;
         if (isGuest) {
-            if ((formData.password || '').length < 8) {
-                toast.error('Choose a password of at least 8 characters for your account.');
+            if ((formData.password || '').length < PASSWORD_MIN) {
+                toast.error(`Choose a password of at least ${PASSWORD_MIN} characters for your account.`);
                 return;
             }
             if (formData.password !== formData.confirmPassword) {
@@ -169,6 +212,7 @@ export const SellerRegistration = () => {
             if (formData.bankName) fd.append('bankName', formData.bankName);
             if (formData.description) fd.append('description', formData.description);
             if (isGuest) fd.append('password', formData.password);
+            if (planPrefill?.subscriptionPaymentId) fd.append('subscriptionPaymentId', planPrefill.subscriptionPaymentId);
 
             // Files
             if (formData.profilePhoto) fd.append('profilePhoto', formData.profilePhoto);
@@ -192,6 +236,7 @@ export const SellerRegistration = () => {
                     submittedAt: new Date().toISOString(),
                 },
             });
+            clearPlanPrefill(); // the plan is now attached to this application
             toast.success(response?.message || 'Registration submitted. An admin will review it shortly.');
             window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -296,6 +341,24 @@ export const SellerRegistration = () => {
                             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#001f3f] text-white shadow-md"><FileText size={18} /></div>
                         </div>
 
+                        {planPrefill && (
+                            <div className="mb-6 flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3.5" data-testid="plan-paid-banner">
+                                <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-600" />
+                                <div className="min-w-0 text-sm">
+                                    <p className="font-bold text-slate-900">Premium plan paid</p>
+                                    <p className="mt-0.5 text-slate-600">
+                                        {planPrefill.locationCategory === 'RURAL' ? 'Rural' : 'Urban'} · {planPrefill.durationMonths === 12 ? '12 months (Yearly)' : `${planPrefill.durationMonths} month${planPrefill.durationMonths > 1 ? 's' : ''}`}
+                                        {planPrefill.amount ? ` · ${formatCurrency(planPrefill.amount)}` : ''}
+                                        {planPrefill.razorpayPaymentId ? ` · Payment ID ${planPrefill.razorpayPaymentId}` : ''}
+                                    </p>
+                                    {planPrefill.email && (
+                                        <p className="mt-1 text-xs text-slate-600">Your invoice is on its way to <strong>{planPrefill.email}</strong>.</p>
+                                    )}
+                                    <p className="mt-1 text-xs text-slate-500">We've filled in your shop name, name, phone and email from the payment. You can change them below.</p>
+                                </div>
+                            </div>
+                        )}
+
                         <form className="space-y-8" onSubmit={handleSubmit}>
                             {/* Seller type */}
                             <div>
@@ -358,12 +421,24 @@ export const SellerRegistration = () => {
                                 <div>
                                     <SectionHeader icon={Lock} title="Create Your Login" subtitle="Sign in later with your email or mobile number and this password" />
                                     <div className="grid gap-4 sm:grid-cols-2">
-                                        <Field label="Password" required><TextInput type="password" name="password" value={formData.password} onChange={handleChange} required minLength={8} autoComplete="new-password" placeholder="At least 8 characters" /></Field>
-                                        <Field label="Confirm password" required><TextInput type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required minLength={8} autoComplete="new-password" /></Field>
+                                        <Field label="Password" required>
+                                            <PasswordInput name="password" value={formData.password} onChange={handleChange} required minLength={PASSWORD_MIN} autoComplete="new-password" placeholder={`At least ${PASSWORD_MIN} characters`}
+                                                invalid={formData.password.length > 0 && formData.password.length < PASSWORD_MIN} />
+                                            {formData.password.length > 0 && formData.password.length < PASSWORD_MIN && (
+                                                <span className="block text-xs text-red-600">At least {PASSWORD_MIN} characters ({PASSWORD_MIN - formData.password.length} more)</span>
+                                            )}
+                                        </Field>
+                                        <Field label="Confirm password" required>
+                                            <PasswordInput name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required minLength={PASSWORD_MIN} autoComplete="new-password" placeholder="Type it again"
+                                                invalid={formData.confirmPassword.length > 0 && formData.confirmPassword !== formData.password} />
+                                            {formData.confirmPassword.length > 0 && formData.confirmPassword !== formData.password && (
+                                                <span className="block text-xs text-red-600">Passwords don't match</span>
+                                            )}
+                                        </Field>
                                     </div>
-                                    <p className="mt-2 text-xs text-slate-500">
+                                    {/* <p className="mt-2 text-xs text-slate-500">
                                         Already have an account? <Link to="/login" state={{ from: '/seller-Register' }} className="font-semibold text-[#001f3f] hover:underline">Sign in</Link> first, then apply.
-                                    </p>
+                                    </p> */}
                                 </div>
                             )}
 

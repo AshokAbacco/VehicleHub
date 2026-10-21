@@ -2,6 +2,7 @@
 import app from "./app.js";
 import { prisma } from "./src/config/db.js";
 import { missingStorageSettings } from "./src/utils/storeUpload.js";
+import { startInvoiceRetryLoop } from "./src/services/invoiceEmail.js";
 
 const PORT = process.env.PORT || 5001;
 
@@ -29,6 +30,9 @@ async function main() {
   app.listen(PORT, () => {
     console.log(`VehicleHub server running on port ${PORT}`);
   });
+
+  // Plan invoices that failed to email are retried in the background
+  startInvoiceRetryLoop();
 }
 
 main();

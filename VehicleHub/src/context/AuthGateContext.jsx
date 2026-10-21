@@ -79,7 +79,8 @@ export const AuthGateProvider = ({ children }) => {
                 return;
             }
         }
-        if (from === '/seller-Register') {
+        // Seller registration and Pricing (buying a plan) continue where they left off
+        if (from === '/seller-Register' || from === '/pricing') {
             navigate(from, { replace: true });
             return;
         }
