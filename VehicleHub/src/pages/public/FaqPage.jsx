@@ -1,74 +1,96 @@
 // VehicleHub/VehicleHub/src/pages/public/FaqPage.jsx
-// Help center / FAQ (/faq) — light theme. Answers describe how VehicleHub actually works.
+// Help center / FAQ (/faq) — light theme. Content from "The Motor Desk" FAQ document.
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import {
-    Search, ChevronDown, HelpCircle, ShoppingBag, Store, CreditCard, ShieldCheck, UserCircle2, Mail, Phone, ArrowRight, X,
+    Search, ChevronDown, HelpCircle, ShoppingBag, Store, Mail, Phone, ArrowRight, X,
 } from 'lucide-react';
 import { COMPANY_CONTACT } from '../../services/contactApiSlice.js';
 
+// Content from "The Motor Desk" FAQ document. An answer is { a } text, with an optional
+// { list } of bullet points and an optional { note } shown in italics.
 const SECTIONS = [
     {
-        id: 'general', title: 'General', icon: HelpCircle,
+        id: 'general', title: 'General Questions', icon: HelpCircle,
         items: [
-            { q: 'What is VehicleHub?', a: 'VehicleHub is MotorDesk\'s online vehicle marketplace. Buyers can find cars, bikes, scooters, trucks, EVs, tractors and commercial vehicles listed by individual sellers and dealers.' },
-            { q: 'Who runs VehicleHub?', a: 'VehicleHub is run by MotorDesk, based in Bengaluru, Karnataka.' },
-            { q: 'Is VehicleHub the seller of the vehicles?', a: 'No. Vehicles are listed and sold by individual sellers and dealers. VehicleHub connects buyers and sellers, reviews accounts and listings, and can inspect vehicles — the sale itself is between the buyer and the seller.' },
-            { q: 'How do I contact support?', a: `Email ${COMPANY_CONTACT.email}, call ${COMPANY_CONTACT.phone}, use the Contact Us page, or "Raise a Ticket" at the bottom of any page. We aim to reply within 24 hours.` },
+            {
+                q: 'What is The Motor Desk?',
+                a: 'The Motor Desk is an online marketplace connecting individual sellers, certified pre-owned dealers, and vehicle buyers across India. We provide a trusted digital space where individuals and dealerships can showcase second-hand cars and two-wheelers directly to verified buyers.',
+            },
+            {
+                q: 'Does The Motor Desk buy or sell vehicles directly?',
+                a: 'No. The Motor Desk acts solely as a discovery and listing facilitator. We do not own, purchase, inspect on-site, or hold inventory. All transactions, negotiations, ownership transfers (RTO paperwork), and payments happen directly between the buyer and the seller/dealer.',
+            },
+            {
+                q: 'What does "Verified Profile / Verified Vehicle" mean?',
+                a: 'When a vehicle or seller shows a Verified badge, it means our operations team has reviewed the submitted documentation—such as registration certificate (RC) details, government ID verification of the seller/dealership, and primary chassis/engine details—against public records/database checks to confirm authenticity.',
+                note: 'Verification does not guarantee mechanical condition; buyers must conduct their own technical inspection.',
+            },
         ],
     },
     {
-        id: 'buying', title: 'Buying a vehicle', icon: ShoppingBag,
+        id: 'sellers', title: 'For Individual Sellers & Dealers', icon: Store,
         items: [
-            { q: 'Do I need an account to browse?', a: 'No. Anyone can browse and search vehicles. You need a free buyer account to save vehicles to your wishlist, see a seller\'s number or send a purchase request.' },
-            { q: 'How do I buy a vehicle?', a: 'Open the vehicle and tap "Buy Now". Enter your offer price and details and send the purchase request. The seller is notified and can accept or decline. You can follow your requests under "My Orders" in your buyer dashboard.' },
-            { q: 'Can I contact the seller directly?', a: 'Yes. Use "Contact Number" on the vehicle page, or — if the seller has added WhatsApp — continue on WhatsApp right after sending your purchase request, with a message already filled in.' },
-            { q: 'Can I cancel a purchase request?', a: 'Yes, while it is still pending. Once a seller accepts it, the vehicle is marked as sold to you and you arrange the payment and paperwork with the seller.' },
-            { q: 'Do I pay for the vehicle on VehicleHub?', a: 'No. Payment for the vehicle and the ownership transfer are arranged directly between you and the seller. Always see the vehicle and check the RC and other documents before you pay.' },
-            { q: 'What do "Verified" and "Unverified" mean?', a: 'Verified listings were reviewed by our team and may have been inspected in person. Unverified listings were published by the seller without our review — they are clearly labelled so you can take extra care.' },
+            {
+                q: 'Who can list vehicles on The Motor Desk?',
+                list: [
+                    ['Individual Owners:', 'Private vehicle owners looking to sell their personal car or bike directly.'],
+                    ['Auto Dealerships:', 'Certified multi-brand second-hand car and bike dealers who want to manage an inventory showcase online.'],
+                ],
+            },
+            {
+                q: 'How much does it cost to list a vehicle?',
+                a: 'The Motor Desk operates on an Annual Membership Model.',
+                list: [
+                    'We do not take transaction cuts or commissions on individual vehicle sales.',
+                    'Members pay an annual subscription fee based on their chosen tier (Individual Seller Tier or Dealer Multi-Listing Tier), granting listing slots, badge verification privileges, and customer inquiries for a full 365 days.',
+                ],
+            },
+            {
+                q: 'What documents are needed to get the "Verified" badge?',
+                a: 'To receive the Verified status, you must upload:',
+                list: [
+                    'High-resolution exterior & interior photos.',
+                    'A clear copy of the RC (Registration Certificate).',
+                    'Valid Insurance Certificate and PUC.',
+                    'Seller ID proof (Aadhaar / Voter ID / Driving License) or Trade License / GSTIN (for Commercial Dealers).',
+                ],
+            },
+            {
+                q: 'How long does the verification process take?',
+                a: 'Once you submit your vehicle photos and documents, our team typically verifies the profile within 24 to 48 business hours.',
+            },
         ],
     },
     {
-        id: 'selling', title: 'Selling & dealers', icon: Store,
+        id: 'buyers', title: 'For Buyers', icon: ShoppingBag,
         items: [
-            { q: 'How do I start selling?', a: 'Go to "Sell" or the Seller Registration page, choose Seller (individual) or Dealer (shop / business), and fill in your details, PAN and address. Our admin team reviews your application, usually within 24 hours.' },
-            { q: 'What is the difference between a Seller and a Dealer?', a: 'A Seller is an individual selling their own vehicle — one listing at a time. A Dealer runs a shop and can list and manage many vehicles from the dealer dashboard.' },
-            { q: 'Can I use VehicleHub before my seller account is approved?', a: 'Yes — you can use the site as a buyer. The Seller / Dealer dashboard opens once an admin approves your application, and you will get a notification.' },
-            { q: 'Should I choose "Verify Vehicle" or "Unverified Vehicle"?', a: '"Verify Vehicle" sends your listing to our team for review first; once approved it shows the Verified badge. "Unverified Vehicle" publishes it immediately, with an Unverified badge that buyers can see.' },
-            { q: 'How do I receive buyer offers?', a: 'Buyers send purchase requests, which appear under "Purchase Requests" in your dashboard with a count of new ones. Accepting a request marks the vehicle as sold to that buyer and declines the others automatically.' },
-            { q: 'Can buyers message me on WhatsApp?', a: 'Yes, if you add your WhatsApp number during registration or later in your profile. Buyers are then taken to WhatsApp with their offer details after sending a request.' },
-        ],
-    },
-    {
-        id: 'plans', title: 'Plans & payments', icon: CreditCard,
-        items: [
-            { q: 'How much does the Premium plan cost?', a: 'Premium is ₹500 per month in urban cities and ₹350 per month in rural areas. You can pay for 1, 3, 6 or 12 months at a time — see the Pricing page.' },
-            { q: 'How do I pay?', a: 'On the Pricing page, choose your area and duration, fill in your shop and contact details, and pay securely through Razorpay (cards, UPI, net banking and other options Razorpay offers).' },
-            { q: 'Will I get an invoice?', a: 'Yes. After the payment is confirmed, a PDF invoice is emailed to the address you entered in the payment form.' },
-            { q: 'My payment failed or was cancelled. Was I charged?', a: 'A plan is only recorded after we confirm the payment with Razorpay. If money was deducted but you did not get a confirmation or invoice, contact support with your Razorpay payment ID.' },
-            { q: 'Why can\'t I pay with my email or phone number?', a: 'If that email or number already belongs to a VehicleHub account, please sign in first and then buy the plan from the Pricing page.' },
-        ],
-    },
-    {
-        id: 'inspections', title: 'Inspections & verification', icon: ShieldCheck,
-        items: [
-            { q: 'What is a field inspection?', a: 'A MotorDesk field inspector visits the vehicle and checks the seller, the documents, the vehicle\'s identity and condition, a test drive and the location — then files a report.' },
-            { q: 'What are the possible results?', a: 'Verified (the listing gets the Verified badge), Needs correction (the seller is told what to fix) or Rejected (the seller receives the reason).' },
-            { q: 'Where can sellers follow an inspection?', a: 'Under "Inspection Requests" in the Seller / Dealer dashboard — with the status, inspector and result.' },
-        ],
-    },
-    {
-        id: 'account', title: 'Account & login', icon: UserCircle2,
-        items: [
-            { q: 'How do I sign in?', a: 'Use your email address or mobile number and your password on the Login page.' },
-            { q: 'I forgot my password. What should I do?', a: 'Please contact our support team by email or phone and we will help you reset it.' },
-            { q: 'Can I change my details?', a: 'Yes. Buyers can update their profile in the buyer dashboard; sellers and dealers can update their business profile, phone and WhatsApp number in the seller dashboard.' },
+            {
+                q: 'How do I contact a seller or dealer?',
+                a: 'Click on any vehicle listing to view the seller\'s contact details, send a direct WhatsApp/Call inquiry, or schedule an in-person test drive.',
+            },
+            {
+                q: 'Can I pay for the vehicle through The Motor Desk?',
+                a: 'No. We do not handle vehicle purchase payments or escrow services. You negotiate, pay, and finalize the purchase directly with the private seller or dealer.',
+            },
+            {
+                q: 'What precautions should I take before buying?',
+                list: [
+                    'Always inspect the vehicle in person during daylight.',
+                    'Bring a trusted mechanic to evaluate the engine, suspension, and chassis condition.',
+                    'Verify original paperwork (RC, active insurance, NOC if moving RTO, tax receipts, loan hypothecation clearance/Form 35).',
+                    'Avoid transferring advance tokens without physically meeting the seller and verifying document ownership.',
+                ],
+            },
         ],
     },
 ];
 
-const Item = ({ q, a, defaultOpen = false }) => {
+const itemText = (it) =>
+    [it.q, it.a, it.note, ...(it.list || []).map((l) => (Array.isArray(l) ? l.join(' ') : l))].filter(Boolean).join(' ');
+
+const Item = ({ q, a, list, note, defaultOpen = false }) => {
     const [open, setOpen] = useState(defaultOpen);
     return (
         <div className={`rounded-2xl border bg-white transition ${open ? 'border-[#001f3f]/20 shadow-sm' : 'border-slate-200'}`}>
@@ -76,7 +98,22 @@ const Item = ({ q, a, defaultOpen = false }) => {
                 <span className="text-sm font-semibold text-slate-900 sm:text-[15px]">{q}</span>
                 <ChevronDown size={18} className={`shrink-0 text-slate-400 transition ${open ? 'rotate-180' : ''}`} />
             </button>
-            {open && <p className="px-5 pb-4 text-sm leading-6 text-slate-600">{a}</p>}
+            {open && (
+                <div className="px-5 pb-4 text-sm leading-6 text-slate-600">
+                    {a && <p>{a}</p>}
+                    {list && (
+                        <ul className={`${a ? 'mt-2' : ''} space-y-1.5`}>
+                            {list.map((l) => (
+                                <li key={Array.isArray(l) ? l[0] : l} className="flex gap-2.5">
+                                    <span className="mt-[9px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#2d6cdf]" />
+                                    <span>{Array.isArray(l) ? <><strong className="font-semibold text-slate-800">{l[0]}</strong> {l[1]}</> : l}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                    {note && <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs italic text-amber-800">Note: {note}</p>}
+                </div>
+            )}
         </div>
     );
 };
@@ -89,7 +126,7 @@ export const FaqPage = () => {
         () =>
             SECTIONS.map((s) => ({
                 ...s,
-                items: q ? s.items.filter((it) => `${it.q} ${it.a}`.toLowerCase().includes(q)) : s.items,
+                items: q ? s.items.filter((it) => itemText(it).toLowerCase().includes(q)) : s.items,
             })).filter((s) => s.items.length),
         [q],
     );
@@ -98,17 +135,17 @@ export const FaqPage = () => {
     return (
         <div className="bg-white text-slate-900">
             <Helmet>
-                <title>Help Center & FAQ | VehicleHub by MotorDesk</title>
-                <meta name="description" content="Answers to common questions about buying, selling, dealer plans, payments, inspections and your VehicleHub account." />
+                <title>Frequently Asked Questions | The Motor Desk</title>
+                <meta name="description" content="Answers to common questions about The Motor Desk for buyers, individual sellers and dealers." />
             </Helmet>
 
             {/* Hero + search */}
             <section className="bg-[radial-gradient(circle_at_top_left,_rgba(45,108,223,0.14),_transparent_45%),linear-gradient(180deg,_#f8fafc_0%,_#eef4ff_100%)]">
-                <div className="mx-auto max-w-3xl px-4 py-14 text-center sm:py-20 lg:px-8">
+                <div className="mx-auto max-w-7xl px-4 py-14 text-center sm:py-20 lg:px-8">
                     <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#2d6cdf]">Help center</p>
                     <h1 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-5xl">How can we help?</h1>
-                    <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-slate-600 sm:text-base">
-                        Answers to the most common questions about buying, selling, plans and inspections on VehicleHub.
+                    <p className="mx-auto mt-4 max-w-7xl text-sm leading-6 text-slate-600 sm:text-base">
+                        Frequently asked questions about The Motor Desk — for buyers, individual sellers and dealers.
                     </p>
                     <div className="relative mx-auto mt-8 max-w-xl">
                         <Search size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -116,7 +153,7 @@ export const FaqPage = () => {
                             type="search"
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            placeholder="Search questions, e.g. invoice, WhatsApp, inspection"
+                            placeholder="Search questions, e.g. verified, documents, payment"
                             aria-label="Search the FAQ"
                             className="w-full rounded-2xl border-2 border-slate-200 bg-white py-3.5 pl-11 pr-11 text-sm shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#001f3f]"
                         />
@@ -140,7 +177,7 @@ export const FaqPage = () => {
             </section>
 
             {/* Questions */}
-            <section className="mx-auto max-w-3xl px-4 py-12 sm:py-14 lg:px-8">
+            <section className="mx-auto max-w-5xl px-4 py-12 sm:py-14 lg:px-8">
                 {q && <p className="mb-6 text-sm text-slate-500">{total} result{total === 1 ? '' : 's'} for “{query.trim()}”</p>}
                 {sections.length === 0 ? (
                     <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 text-center">
