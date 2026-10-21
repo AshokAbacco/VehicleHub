@@ -134,7 +134,7 @@ export const VehicleCard = ({ vehicle }) => {
                             loading="lazy"
                             decoding="async"
                             onError={() => setBadgeFailed(true)}
-                            className="h-9 w-auto max-w-[96px] shrink-0 object-contain"
+                            className="h-22 w-auto max-w-[306px] shrink-0 object-contain"
                         />
                     )}
                 </div>
