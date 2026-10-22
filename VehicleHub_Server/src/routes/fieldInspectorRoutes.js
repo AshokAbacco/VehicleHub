@@ -6,6 +6,17 @@ import { uploadFields } from "../middleware/uploadMiddleware.js";
 import * as fi from "../controllers/fieldInspectorController.js";
 
 const router = Router();
+
+// Inspection photo uploads (kept in memory, then stored in Cloudflare R2) with readable errors
+const photoUpload = (fields) => (req, res, next) =>
+  uploadFields(fields)(req, res, (err) => {
+    if (!err) return next();
+    const message =
+      err.code === "LIMIT_FILE_SIZE" ? "Each photo must be 8 MB or smaller"
+        : err.code === "LIMIT_UNEXPECTED_FILE" || err.code === "LIMIT_FILE_COUNT" ? "Too many photos in one upload (max 20)"
+          : err.message || "Upload failed";
+    return res.status(400).json({ success: false, message });
+  });
 router.use(authenticateUser, requireAuth, authorizeRoles("INSPECTOR"));
 
 // Dashboard
@@ -31,7 +42,8 @@ router.patch("/inspections/:id/vehicle-identity", fi.updateVehicleIdentity);
 router.patch("/inspections/:id/vehicle-check", fi.updateVehicleCheck);
 router.patch("/inspections/:id/test-drive", fi.updateTestDrive);
 router.patch("/inspections/:id/location", fi.updateLocation);
-router.post("/inspections/:id/photos", uploadFields([{ name: "photos", maxCount: 20 }]), fi.uploadPhotos);
+router.post("/inspections/:id/photos", photoUpload([{ name: "photos", maxCount: 20 }]), fi.uploadPhotos);
+router.put("/inspections/:id/photos/:photoId", photoUpload([{ name: "photo", maxCount: 1 }]), fi.replacePhoto);
 router.delete("/inspections/:id/photos/:photoId", fi.deletePhoto);
 router.post("/inspections/:id/submit", fi.submitInspection);
 

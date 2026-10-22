@@ -5,7 +5,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
     Search, Heart, User, Plus, MapPin, ChevronDown, Menu, X,
     Bell, FileText, ClipboardList, ShoppingCart,
-    HelpCircle, Settings, LogOut, Pencil, LayoutDashboard, Crown,
+    HelpCircle, Settings, LogOut, Pencil, LayoutDashboard,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useAuthGate } from "../../context/AuthGateContext.jsx";
@@ -188,9 +188,13 @@ export const Navbar = () => {
             <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 lg:px-8">
                 {/* Logo */}
                 <Link to="/" className="flex shrink-0 items-center gap-1.5 sm:gap-2 rounded-lg transition active:scale-95">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#001f3f] text-sm font-bold text-white sm:h-9 sm:w-9">V</div>
-                    <span className="hidden text-base font-black tracking-tight text-slate-900 sm:block sm:text-lg">
-                        Vehicle <span className="text-[#001f3f]">Hub</span>
+                    {/* Brand: settings (gear) mark + MotorDesk, with VehicleHub underneath */}
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#001f3f] text-white sm:h-9 sm:w-9">
+                        <Settings size={18} strokeWidth={2.25} aria-hidden="true" />
+                    </div>
+                    <span className="flex flex-col leading-none">
+                        <span className="text-base font-black tracking-tight text-slate-900 sm:text-lg">MotorDesk</span>
+                        <span className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">VehicleHub</span>
                     </span>
                 </Link>
 
@@ -362,15 +366,6 @@ export const Navbar = () => {
                             {cat.label}
                         </Link>
                     ))}
-                    <Link
-                        to="/pricing"
-                        aria-current={location.pathname === "/pricing" ? "page" : undefined}
-                        className={`ml-auto flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-all duration-150 active:scale-95 ${location.pathname === "/pricing"
-                            ? "border-[#001f3f] bg-[#001f3f] text-white"
-                            : "border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-400 hover:bg-amber-100"}`}
-                    >
-                        <Crown size={14} /> Pricing
-                    </Link>
                 </div>
             </div>
 
@@ -393,15 +388,6 @@ export const Navbar = () => {
                                 {cat.label}
                             </Link>
                         ))}
-                        <Link
-                            to="/pricing"
-                            aria-current={location.pathname === "/pricing" ? "page" : undefined}
-                            className={`flex items-center gap-1 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition active:scale-95 ${location.pathname === "/pricing"
-                                ? "border-[#001f3f] bg-[#001f3f] text-white"
-                                : "border-amber-300 bg-amber-50 text-amber-800"}`}
-                        >
-                            <Crown size={12} /> Pricing
-                        </Link>
                     </div>
 
                     <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">

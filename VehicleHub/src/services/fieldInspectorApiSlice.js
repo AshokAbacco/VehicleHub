@@ -1,3 +1,4 @@
+// VehicleHub/VehicleHub/src/services/fieldInspectorApiSlice.js
 import { apiSlice } from "./apiSlice.js";
 
 const fieldInspectorApiSlice = apiSlice.injectEndpoints({
@@ -148,20 +149,31 @@ const fieldInspectorApiSlice = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ["InspectionById"],
     }),
+    // Inspection photos (stored in Cloudflare R2 by the backend). Each response returns the full
+    // inspection; InspectionVerify keeps photos from that response instead of refetching, so
+    // unsaved edits in the open step are not reset.
+    // formData: photos[] + step (seller | documents | identity | exterior | interior | mechanical
+    // | testDrive | location | evidence) + category (shot label)
     uploadInspectionPhotos: builder.mutation({
       query: ({ id, formData }) => ({
         url: `field-inspector/inspections/${id}/photos`,
         method: "POST",
         body: formData,
       }),
-      invalidatesTags: ["InspectionById"],
+    }),
+    // formData: photo (one file) — swaps the image of an existing photo
+    replaceInspectionPhoto: builder.mutation({
+      query: ({ id, photoId, formData }) => ({
+        url: `field-inspector/inspections/${id}/photos/${photoId}`,
+        method: "PUT",
+        body: formData,
+      }),
     }),
     deleteInspectionPhoto: builder.mutation({
       query: ({ id, photoId }) => ({
         url: `field-inspector/inspections/${id}/photos/${photoId}`,
         method: "DELETE",
       }),
-      invalidatesTags: ["InspectionById"],
     }),
     submitInspection: builder.mutation({
       query: ({ id, ...body }) => ({
@@ -228,6 +240,8 @@ export const {
   useUpdateTestDriveMutation,
   useUpdateLocationMutation,
   useUploadInspectionPhotosMutation,
+  useReplaceInspectionPhotoMutation,
+  useDeleteInspectionPhotoMutation,
   useSubmitInspectionMutation,
   useUpdateInspectorProfileMutation,
   useChangeInspectorPasswordMutation,

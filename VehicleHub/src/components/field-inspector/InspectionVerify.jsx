@@ -1,10 +1,11 @@
+// VehicleHub/VehicleHub/src/components/field-inspector/InspectionVerify.jsx
 import { useState, useEffect, useRef } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
     ArrowLeft, ArrowRight, Save, Check, User, FileText, Fingerprint, Car, Sofa,
-    Wrench, Gauge, MapPin, Camera, ClipboardCheck, Loader2, Upload, X, Star, Navigation,
+    Wrench, Gauge, MapPin, Camera, ClipboardCheck, Loader2, Star, Navigation,
     Eye, Download,
 } from 'lucide-react';
 import {
@@ -15,9 +16,10 @@ import {
     useUpdateVehicleCheckMutation,
     useUpdateTestDriveMutation,
     useUpdateLocationMutation,
-    useUploadInspectionPhotosMutation,
     useSubmitInspectionMutation,
 } from '../../services/fieldInspectorApiSlice.js';
+import { StepPhotos } from './StepPhotos.jsx';
+import { MIN_STEP_PHOTOS, photosForStep } from '../../utils/inspectionPhotos.js';
 
 const STEPS = [
     { id: 1, label: 'Seller Verification', icon: User },
@@ -33,7 +35,31 @@ const STEPS = [
 ];
 
 
-const CONDITIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED'];
+const CONDITIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR', 'DAMAGED', 'N/A'];
+
+// Photo evidence per step: the step key saved with each photo + suggested photo labels.
+// Exterior, Interior and Engine & Mechanical need at least MIN_STEP_PHOTOS (8) photos.
+const PHOTO_STEP = {
+    1: { key: 'seller', shots: ['Seller with Vehicle', 'Seller ID Proof', 'Other'] },
+    2: { key: 'documents', shots: ['RC (Original)', 'Insurance', 'Pollution Certificate (PUC)', 'Ownership Proof', 'Other Document'] },
+    3: { key: 'identity', shots: ['Number Plate', 'VIN / Chassis Number', 'Engine Number', 'Other'] },
+    4: {
+        key: 'exterior', required: MIN_STEP_PHOTOS,
+        shots: ['Front View', 'Rear View', 'Left Side', 'Right Side', 'Front-Left Angle', 'Rear-Right Angle', 'Roof', 'Tyres & Wheels', 'Headlights / Tail Lights', 'Windshield', 'Dents / Scratches', 'Other'],
+    },
+    5: {
+        key: 'interior', required: MIN_STEP_PHOTOS,
+        shots: ['Dashboard', 'Odometer Reading', 'Instrument Cluster (Engine On)', 'Front Seats', 'Rear Seats', 'Steering & Controls', 'Infotainment / AC Panel', 'Door Trims', 'Roof Lining', 'Boot Space', 'Floor / Carpet', 'Other'],
+    },
+    6: {
+        key: 'mechanical', required: MIN_STEP_PHOTOS,
+        shots: ['Engine Bay', 'Engine Left Side', 'Engine Right Side', 'Engine Oil / Dipstick', 'Coolant Reservoir', 'Battery', 'Underbody', 'Exhaust', 'Suspension', 'Brakes / Discs', 'Leakage (if any)', 'Other'],
+    },
+    7: { key: 'testDrive', shots: ['Odometer Before Drive', 'Odometer After Drive', 'Warning Lights', 'Other'] },
+    8: { key: 'location', shots: ['Vehicle at Location', 'Street / Landmark', 'Other'] },
+    9: { key: 'evidence', shots: ['Vehicle Front', 'Vehicle Rear', 'Vehicle Left', 'Vehicle Right', 'Interior', 'Dashboard', 'Engine', 'Tyres', 'RC', 'Insurance', 'VIN/Chassis', 'Engine Number', 'Registration Plate', 'Damage', 'Other'] },
+};
+const REQUIRED_PHOTO_STEPS = [4, 5, 6];
 
 const StepShell = ({ title, subtitle, children }) => (
     <div className="animate-fadeInUp rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
@@ -233,7 +259,6 @@ export const InspectionVerify = () => {
     const [updateCheck] = useUpdateVehicleCheckMutation();
     const [updateTestDrive] = useUpdateTestDriveMutation();
     const [updateLocation] = useUpdateLocationMutation();
-    const [uploadPhotos] = useUploadInspectionPhotosMutation();
     const [submitInspection, { isLoading: submitting }] = useSubmitInspectionMutation();
 
     // ---- Step 1: Seller ----
@@ -281,9 +306,9 @@ export const InspectionVerify = () => {
     const [identity, setIdentity] = useState({ observedRegistrationNumber: '', observedVin: '', observedEngineNumber: '', registrationMatch: false, vinMatch: false, engineMatch: false, notes: '' });
 
     // ---- Steps 4/5/6 ----
-    const EXTERIOR_ITEMS = ['Front', 'Rear', 'Left Side', 'Right Side', 'Bonnet', 'Boot', 'Doors', 'Windows', 'Lights', 'Tyres', 'Bumpers', 'Windshield'];
-    const INTERIOR_ITEMS = ['Dashboard', 'Seats', 'Seat Belts', 'AC', 'Infotainment', 'Power Windows', 'Central Locking', 'Steering', 'Horn', 'Floor/Carpet', 'Boot Interior'];
-    const MECHANICAL_ITEMS = ['Engine Start', 'Engine Sound', 'Oil Leakage', 'Coolant Leakage', 'Brakes', 'Clutch', 'Gearbox', 'Suspension', 'Battery'];
+    const EXTERIOR_ITEMS = ['Front', 'Rear', 'Left Side', 'Right Side', 'Bonnet', 'Boot', 'Doors', 'Windows', 'Lights', 'Tyres', 'Bumpers', 'Windshield', 'Side Mirrors (ORVM)', 'Wipers', 'Paint Condition', 'Dents & Scratches', 'Rust / Corrosion', 'Alloy Wheels / Rims', 'Spare Tyre'];
+    const INTERIOR_ITEMS = ['Dashboard', 'Seats', 'Seat Belts', 'AC', 'Infotainment', 'Power Windows', 'Central Locking', 'Steering', 'Horn', 'Floor/Carpet', 'Boot Interior', 'Instrument Cluster', 'Warning Lights', 'Odometer', 'Interior Lights', 'Roof Lining', 'Door Trims', 'Rear-view Mirror', 'Odour / Cleanliness'];
+    const MECHANICAL_ITEMS = ['Engine Start', 'Engine Sound', 'Oil Leakage', 'Coolant Leakage', 'Brakes', 'Clutch', 'Gearbox', 'Suspension', 'Battery', 'Engine Oil Level', 'Coolant Level', 'Exhaust Smoke', 'Radiator', 'Belts & Hoses', 'Engine Mounts', 'Steering System', 'Alternator / Charging', 'Underbody'];
     const [exterior, setExterior] = useState({});
     const [interior, setInterior] = useState({});
     const [mechanical, setMechanical] = useState({});
@@ -305,9 +330,8 @@ export const InspectionVerify = () => {
     const [sellerPresent, setSellerPresent] = useState(false);
     const [locationRemarks, setLocationRemarks] = useState('');
 
-    // ---- Step 9: Photos ----
-    const [photoCategory, setPhotoCategory] = useState('Vehicle Front');
-    const [uploadingPhotos, setUploadingPhotos] = useState(false);
+    // ---- Photos (all steps) — taken from each upload's response, so unsaved edits aren't reset ----
+    const [photoState, setPhotoState] = useState(null);
 
     // ---- Step 10: Final ----
     const [finalResult, setFinalResult] = useState('VERIFIED');
@@ -341,7 +365,6 @@ export const InspectionVerify = () => {
         vehiclePresent,
         sellerPresent,
         locationRemarks,
-        photoCategory,
         finalResult,
         finalRating,
         finalNotes,
@@ -378,7 +401,6 @@ export const InspectionVerify = () => {
             if (draft.vehiclePresent !== undefined) setVehiclePresent(draft.vehiclePresent);
             if (draft.sellerPresent !== undefined) setSellerPresent(draft.sellerPresent);
             if (draft.locationRemarks !== undefined) setLocationRemarks(draft.locationRemarks);
-            if (draft.photoCategory) setPhotoCategory(draft.photoCategory);
             if (draft.finalResult) setFinalResult(draft.finalResult);
             if (draft.finalRating !== undefined) setFinalRating(draft.finalRating);
             if (draft.finalNotes !== undefined) setFinalNotes(draft.finalNotes);
@@ -393,7 +415,7 @@ export const InspectionVerify = () => {
     useEffect(() => {
         if (!inspection || !id) return;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(buildDraftPayload()));
-    }, [inspection, id, step, sellerChecks, sellerNotes, docs, identity, exterior, interior, mechanical, exteriorNotes, interiorNotes, mechanicalNotes, testDriveDone, testDriveRating, testDriveNotes, skipReason, actualAddress, coords, locationMatched, vehiclePresent, sellerPresent, locationRemarks, photoCategory, finalResult, finalRating, finalNotes, rejectionReason, correctionReason]);
+    }, [inspection, id, step, sellerChecks, sellerNotes, docs, identity, exterior, interior, mechanical, exteriorNotes, interiorNotes, mechanicalNotes, testDriveDone, testDriveRating, testDriveNotes, skipReason, actualAddress, coords, locationMatched, vehiclePresent, sellerPresent, locationRemarks, finalResult, finalRating, finalNotes, rejectionReason, correctionReason]);
 
     // Resume where the inspector left off: jump to the first incomplete step and
     // refill each step's fields from whatever was already saved to the backend.
@@ -479,6 +501,38 @@ export const InspectionVerify = () => {
     const goNext = () => setStep((s) => Math.min(s + 1, 10));
     const goBack = () => setStep((s) => Math.max(s - 1, 1));
 
+    const photos = photoState ?? inspection.photos ?? [];
+    const photoCount = (stepId) => photosForStep(photos, PHOTO_STEP[stepId].key).length;
+    const photoShortfall = (stepId) =>
+        REQUIRED_PHOTO_STEPS.includes(stepId) && photoCount(stepId) < MIN_STEP_PHOTOS
+            ? `${STEPS[stepId - 1].label}: upload at least ${MIN_STEP_PHOTOS} photos to continue (${photoCount(stepId)}/${MIN_STEP_PHOTOS} uploaded)`
+            : null;
+
+    // Moving forward past Exterior / Interior / Engine & Mechanical needs their 8 photos
+    const goToStep = (target) => {
+        if (target > step) {
+            const blocked = REQUIRED_PHOTO_STEPS.find((s) => s >= step && s < target && photoShortfall(s));
+            if (blocked) {
+                toast.error(photoShortfall(blocked));
+                if (blocked !== step) setStep(blocked);
+                return;
+            }
+        }
+        setStep(target);
+    };
+
+    const stepPhotos = (stepId, extra = {}) => (
+        <StepPhotos
+            inspectionId={id}
+            step={PHOTO_STEP[stepId].key}
+            photos={photos}
+            onPhotosChange={setPhotoState}
+            required={PHOTO_STEP[stepId].required || 0}
+            shots={PHOTO_STEP[stepId].shots}
+            {...extra}
+        />
+    );
+
     const captureLocation = () => {
         if (!navigator.geolocation) return toast.error('Geolocation not supported');
         navigator.geolocation.getCurrentPosition(
@@ -487,24 +541,12 @@ export const InspectionVerify = () => {
         );
     };
 
-    const handlePhotoUpload = async (e) => {
-        const files = Array.from(e.target.files || []);
-        if (!files.length) return;
-        const formData = new FormData();
-        files.forEach((f) => formData.append('photos', f));
-        formData.append('category', photoCategory);
-        setUploadingPhotos(true);
-        try {
-            await uploadPhotos({ id, formData }).unwrap();
-            toast.success('Photos uploaded');
-        } catch (err) {
-            toast.error(err?.data?.message || 'Upload failed');
-        } finally {
-            setUploadingPhotos(false);
-            e.target.value = '';
-        }
-    };
     const handleSaveStep = async () => {
+        const shortfall = photoShortfall(step);
+        if (shortfall) {
+            toast.error(shortfall);
+            return;
+        }
         try {
             if (step === 1) {
                 await updateSeller({ id, checks: sellerChecks, notes: sellerNotes, status: Object.values(sellerChecks).every(Boolean) ? 'VERIFIED' : 'NEEDS_CORRECTION' }).unwrap();
@@ -538,6 +580,11 @@ export const InspectionVerify = () => {
     };
 
     const handleSubmitFinal = async () => {
+        const missing = REQUIRED_PHOTO_STEPS.filter((s) => photoShortfall(s));
+        if (missing.length) {
+            toast.error(`Upload at least ${MIN_STEP_PHOTOS} photos for: ${missing.map((s) => `${STEPS[s - 1].label} (${photoCount(s)}/${MIN_STEP_PHOTOS})`).join(', ')}`);
+            return;
+        }
         try {
             await submitInspection({ id, result: finalResult, finalRating: finalRating || undefined, finalNotes, rejectionReason, correctionReason }).unwrap();
             localStorage.removeItem(STORAGE_KEY);
@@ -573,7 +620,7 @@ export const InspectionVerify = () => {
                         return (
                             <button
                                 key={s.id}
-                                onClick={() => setStep(s.id)}
+                                onClick={() => goToStep(s.id)}
                                 className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${step === s.id ? 'bg-[#001f3f] text-white' : step > s.id ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
                                     }`}
                             >
@@ -601,6 +648,7 @@ export const InspectionVerify = () => {
                         <CheckboxRow label="Seller authorization confirmed" checked={sellerChecks.authorized} onChange={(v) => setSellerChecks({ ...sellerChecks, authorized: v })} />
                     </div>
                     <div className="mt-4"><TextArea rows={3} value={sellerNotes} onChange={(e) => setSellerNotes(e.target.value)} placeholder="Inspector remarks..." /></div>
+                    {stepPhotos(1, { hint: 'e.g. the seller with the vehicle or their ID proof.' })}
                 </StepShell>
             )}
 
@@ -623,6 +671,7 @@ export const InspectionVerify = () => {
                             </p>
                         )}
                     </div>
+                    {stepPhotos(2, { title: 'Document photos', hint: 'Photograph the original documents shown by the seller.' })}
                 </StepShell>
             )}
 
@@ -655,6 +704,7 @@ export const InspectionVerify = () => {
                         </div>
                     </div>
                     <div className="mt-4"><TextArea rows={3} value={identity.notes} onChange={(e) => setIdentity({ ...identity, notes: e.target.value })} placeholder="Mismatch details / notes..." /></div>
+                    {stepPhotos(3, { hint: 'Number plate, VIN / chassis and engine number.' })}
                 </StepShell>
             )}
 
@@ -663,6 +713,7 @@ export const InspectionVerify = () => {
                 <StepShell title="Step 4 — Exterior Inspection" subtitle="Inspect each exterior component and rate its condition.">
                     <ItemChecklist items={EXTERIOR_ITEMS} values={exterior} onChange={(item, val) => setExterior({ ...exterior, [item]: val })} />
                     <div className="mt-4"><TextArea rows={3} value={exteriorNotes} onChange={(e) => setExteriorNotes(e.target.value)} placeholder="Overall exterior notes..." /></div>
+                    {stepPhotos(4, { title: 'Exterior photos', hint: `At least ${MIN_STEP_PHOTOS} photos — all sides, angles, tyres and any damage.` })}
                 </StepShell>
             )}
 
@@ -671,6 +722,7 @@ export const InspectionVerify = () => {
                 <StepShell title="Step 5 — Interior Inspection" subtitle="Inspect interior components.">
                     <ItemChecklist items={INTERIOR_ITEMS} values={interior} onChange={(item, val) => setInterior({ ...interior, [item]: val })} />
                     <div className="mt-4"><TextArea rows={3} value={interiorNotes} onChange={(e) => setInteriorNotes(e.target.value)} placeholder="Overall interior notes..." /></div>
+                    {stepPhotos(5, { title: 'Interior photos', hint: `At least ${MIN_STEP_PHOTOS} photos — dashboard, odometer, seats, controls and boot.` })}
                 </StepShell>
             )}
 
@@ -679,6 +731,7 @@ export const InspectionVerify = () => {
                 <StepShell title="Step 6 — Engine & Mechanical" subtitle="Check mechanical systems.">
                     <ItemChecklist items={MECHANICAL_ITEMS} values={mechanical} onChange={(item, val) => setMechanical({ ...mechanical, [item]: val })} />
                     <div className="mt-4"><TextArea rows={3} value={mechanicalNotes} onChange={(e) => setMechanicalNotes(e.target.value)} placeholder="Mechanical notes / warning lights..." /></div>
+                    {stepPhotos(6, { title: 'Engine & mechanical photos', hint: `At least ${MIN_STEP_PHOTOS} photos — engine bay, fluids, battery, underbody and any leaks.` })}
                 </StepShell>
             )}
 
@@ -704,6 +757,7 @@ export const InspectionVerify = () => {
                     ) : (
                         <TextArea rows={3} value={skipReason} onChange={(e) => setSkipReason(e.target.value)} placeholder="Reason for skipping test drive (required)..." />
                     )}
+                    {stepPhotos(7, { hint: 'e.g. odometer before and after the drive, warning lights.' })}
                 </StepShell>
             )}
 
@@ -727,36 +781,34 @@ export const InspectionVerify = () => {
                         <CheckboxRow label="Seller is present" checked={sellerPresent} onChange={setSellerPresent} />
                     </div>
                     <div className="mt-4"><TextArea rows={3} value={locationRemarks} onChange={(e) => setLocationRemarks(e.target.value)} placeholder="Location notes..." /></div>
+                    {stepPhotos(8, { hint: 'The vehicle at the location, with a landmark if possible.' })}
                 </StepShell>
             )}
 
             {/* STEP 9 — Photos */}
             {step === 9 && (
                 <StepShell title="Step 9 — Photos & Evidence" subtitle="Upload evidence photos by category.">
-                    <div className="mb-4 flex flex-wrap items-center gap-2">
-                        <select value={photoCategory} onChange={(e) => setPhotoCategory(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-[#001f3f] focus:outline-none">
-                            {['Vehicle Front', 'Vehicle Rear', 'Vehicle Left', 'Vehicle Right', 'Interior', 'Dashboard', 'Engine', 'Tyres', 'RC', 'Insurance', 'VIN/Chassis', 'Engine Number', 'Registration Plate', 'Damage', 'Other'].map((c) => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                        <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-[#001f3f] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#002a55]">
-                            {uploadingPhotos ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
-                            Upload Photos
-                            <input type="file" accept="image/*" multiple hidden onChange={handlePhotoUpload} disabled={uploadingPhotos} />
-                        </label>
+                    {/* Photos taken in each step */}
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => {
+                            const n = photoCount(s);
+                            const short = REQUIRED_PHOTO_STEPS.includes(s) && n < MIN_STEP_PHOTOS;
+                            return (
+                                <button
+                                    key={s}
+                                    type="button"
+                                    onClick={() => setStep(s)}
+                                    className={`rounded-xl border px-3 py-2 text-left transition hover:border-[#001f3f]/30 ${short ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}
+                                >
+                                    <p className="truncate text-[11px] font-semibold text-slate-500">{STEPS[s - 1].label}</p>
+                                    <p className={`text-sm font-bold ${short ? 'text-amber-700' : 'text-slate-800'}`}>
+                                        {REQUIRED_PHOTO_STEPS.includes(s) ? `${n}/${MIN_STEP_PHOTOS}` : n} photo{n === 1 ? '' : 's'}
+                                    </p>
+                                </button>
+                            );
+                        })}
                     </div>
-                    {inspection.photos?.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
-                            {inspection.photos.map((p) => (
-                                <div key={p.id} className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200">
-                                    <img src={p.imageUrl} alt={p.category} className="h-full w-full object-cover" />
-                                    <span className="absolute bottom-0 left-0 right-0 truncate bg-black/60 px-1 py-0.5 text-[9px] text-white">{p.category}</span>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="py-8 text-center text-sm text-slate-400">No photos uploaded yet.</p>
-                    )}
+                    {stepPhotos(9, { title: 'Additional evidence photos', hint: 'Choose a category, then take or upload photos.' })}
                 </StepShell>
             )}
 

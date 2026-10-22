@@ -10,7 +10,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "../config/db.js";
-import { storeUpload } from "../utils/storeUpload.js";
+import { storeUpload, deleteStoredFiles } from "../utils/storeUpload.js";
 import { inspectionInclude, toInspectionDTO, inspectionNo } from "../utils/inspectionDto.js";
 
 const ok = (res, data, message = "OK", status = 200) => res.status(status).json({ success: true, message, data });
@@ -350,6 +350,15 @@ export const updateVehicleCheck = async (req, res, next) => {
     const category = String(req.body?.category || "");
     const key = CHECK_CATEGORIES[category];
     if (!key) return fail(res, "category must be Exterior, Interior or Mechanical");
+    // Exterior / Interior / Engine & Mechanical need at least 8 photos before the step can be saved
+    const photoCount = photosForStep(i.photos, key).length;
+    if (photoCount < MIN_STEP_PHOTOS) {
+      return res.status(400).json({
+        success: false,
+        message: `${PHOTO_STEPS[key].label}: upload at least ${MIN_STEP_PHOTOS} photos before continuing (${photoCount}/${MIN_STEP_PHOTOS} uploaded)`,
+        data: { step: key, uploaded: photoCount, required: MIN_STEP_PHOTOS },
+      });
+    }
     const items = (Array.isArray(req.body?.items) ? req.body.items : []).map((c) => ({
       id: newId(),
       category,
@@ -425,22 +434,118 @@ export const updateLocation = async (req, res, next) => {
   }
 };
 
-// multipart: photos[] + category
+// ------------------------------------------------------------
+// PHOTOS — stored in Cloudflare R2 (utils/storeUpload.js); only the URL is kept on the inspection.
+// Each photo is tagged with the verification step it belongs to:
+//   { id, imageUrl, category, step, uploadedAt }
+// Photos without a step (uploaded before steps were added) count as "evidence" (step 9).
+// ------------------------------------------------------------
+export const MIN_STEP_PHOTOS = 8;
+const PHOTO_STEPS = {
+  seller: { label: "Seller Verification" },
+  documents: { label: "Document Verification" },
+  identity: { label: "Vehicle Identity" },
+  exterior: { label: "Exterior Inspection", required: true },
+  interior: { label: "Interior Inspection", required: true },
+  mechanical: { label: "Engine & Mechanical", required: true },
+  testDrive: { label: "Test Drive" },
+  location: { label: "Location Verification" },
+  evidence: { label: "Photos & Evidence" },
+};
+const MAX_PHOTOS_PER_STEP = 30;
+const REQUIRED_PHOTO_STEPS = Object.keys(PHOTO_STEPS).filter((k) => PHOTO_STEPS[k].required);
+
+const asPhotos = (v) => (Array.isArray(v) ? v : []);
+const stepOf = (p) => (p?.step && PHOTO_STEPS[p.step] ? p.step : "evidence");
+const photosForStep = (photos, step) => asPhotos(photos).filter((p) => stepOf(p) === step);
+const isImage = (f) => /^image\//i.test(f?.mimetype || "");
+
+// Steps whose photo minimum is not met: [{ step, label, uploaded, required }]
+const missingStepPhotos = (photos) =>
+  REQUIRED_PHOTO_STEPS.map((step) => ({ step, label: PHOTO_STEPS[step].label, uploaded: photosForStep(photos, step).length, required: MIN_STEP_PHOTOS }))
+    .filter((s) => s.uploaded < s.required);
+
+// Read-modify-write of the photos list under a row lock, so two uploads at the same time
+// can't overwrite each other.
+const updatePhotos = (i, change) =>
+  prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Inspection" WHERE id = ${i.id} FOR UPDATE`;
+    const fresh = await tx.inspection.findUnique({ where: { id: i.id }, select: { photos: true, checklist: true, status: true, startedAt: true, acceptedAt: true } });
+    const { photos, removed = [] } = change(asPhotos(fresh.photos));
+    const checklist = { ...(fresh.checklist || {}), photosCompleted: photos.length > 0 };
+    // a step that drops below its photo minimum is no longer complete
+    for (const step of REQUIRED_PHOTO_STEPS) {
+      if (photosForStep(photos, step).length < MIN_STEP_PHOTOS) checklist[`${step}Verified`] = false;
+    }
+    const now = new Date();
+    await tx.inspection.update({
+      where: { id: i.id },
+      data: {
+        photos,
+        checklist,
+        ...(fresh.status !== "IN_PROGRESS" ? { status: "IN_PROGRESS", startedAt: fresh.startedAt || now, acceptedAt: fresh.acceptedAt || now } : {}),
+      },
+    });
+    return removed;
+  });
+
+// multipart: photos[] + step + category
 export const uploadPhotos = async (req, res, next) => {
   try {
     const i = await loadEditable(req, res);
     if (!i) return;
     const files = req.files?.photos || [];
     if (!files.length) return fail(res, "Choose at least one photo");
-    const category = String(req.body?.category || "Other");
-    const added = [];
-    for (const f of files) {
-      const imageUrl = await storeUpload(f, "vehiclehub/inspections", req);
-      if (imageUrl) added.push({ id: newId(), imageUrl, category, uploadedAt: new Date().toISOString() });
+    if (files.some((f) => !isImage(f))) return fail(res, "Only image files can be uploaded");
+    const step = String(req.body?.step || "evidence");
+    if (!PHOTO_STEPS[step]) return fail(res, "Unknown verification step");
+    const already = photosForStep(i.photos, step).length;
+    if (already + files.length > MAX_PHOTOS_PER_STEP) {
+      return fail(res, `A step can have at most ${MAX_PHOTOS_PER_STEP} photos (${already} already uploaded)`);
     }
-    const photos = [...(Array.isArray(i.photos) ? i.photos : []), ...added];
-    await saveStep(i, { photos, checklist: withChecklist(i, { photosCompleted: photos.length > 0 }) });
+    const category = String(req.body?.category || "").trim().slice(0, 80) || PHOTO_STEPS[step].label;
+
+    const added = [];
+    try {
+      for (const f of files) {
+        const imageUrl = await storeUpload(f, "vehiclehub/inspections", req);
+        if (imageUrl) added.push({ id: newId(), imageUrl, category, step, uploadedAt: new Date().toISOString() });
+      }
+    } catch (err) {
+      await deleteStoredFiles(added.map((p) => p.imageUrl)); // don't leave half a batch in R2
+      throw err;
+    }
+    await updatePhotos(i, (photos) => ({ photos: [...photos, ...added] }));
     return sendInspection(res, i.id, `${added.length} photo${added.length === 1 ? "" : "s"} uploaded`);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// multipart: photo (one file) — swaps the image, keeps the photo's step/category/position
+export const replacePhoto = async (req, res, next) => {
+  try {
+    const i = await loadEditable(req, res);
+    if (!i) return;
+    const file = req.files?.photo?.[0];
+    if (!file) return fail(res, "Choose a photo");
+    if (!isImage(file)) return fail(res, "Only image files can be uploaded");
+    if (!asPhotos(i.photos).some((p) => p.id === req.params.photoId)) return fail(res, "Photo not found", 404);
+
+    const imageUrl = await storeUpload(file, "vehiclehub/inspections", req);
+    let found = false;
+    const removed = await updatePhotos(i, (photos) => {
+      const old = photos.find((p) => p.id === req.params.photoId);
+      if (!old) return { photos, removed: [imageUrl] }; // removed meanwhile — drop the new upload
+      found = true;
+      return {
+        photos: photos.map((p) => (p.id === old.id ? { ...p, imageUrl, uploadedAt: new Date().toISOString() } : p)),
+        removed: [old.imageUrl],
+      };
+    });
+    await deleteStoredFiles(removed);
+    if (!found) return fail(res, "Photo not found", 404);
+    return sendInspection(res, i.id, "Photo replaced");
   } catch (error) {
     next(error);
   }
@@ -450,8 +555,11 @@ export const deletePhoto = async (req, res, next) => {
   try {
     const i = await loadEditable(req, res);
     if (!i) return;
-    const photos = (Array.isArray(i.photos) ? i.photos : []).filter((p) => p.id !== req.params.photoId);
-    await saveStep(i, { photos, checklist: withChecklist(i, { photosCompleted: photos.length > 0 }) });
+    const removed = await updatePhotos(i, (photos) => ({
+      photos: photos.filter((p) => p.id !== req.params.photoId),
+      removed: photos.filter((p) => p.id === req.params.photoId).map((p) => p.imageUrl),
+    }));
+    await deleteStoredFiles(removed);
     return sendInspection(res, i.id, "Photo removed");
   } catch (error) {
     next(error);
@@ -470,6 +578,14 @@ export const submitInspection = async (req, res, next) => {
     const correctionReason = String(b.correctionReason || "").trim() || null;
     if (result === "REJECTED" && !rejectionReason) return fail(res, "Add a rejection reason");
     if (result === "NEEDS_CORRECTION" && !correctionReason) return fail(res, "Describe what the seller needs to correct");
+    const missingPhotos = missingStepPhotos(i.photos);
+    if (missingPhotos.length) {
+      return res.status(400).json({
+        success: false,
+        message: `Upload at least ${MIN_STEP_PHOTOS} photos for: ${missingPhotos.map((m) => `${m.label} (${m.uploaded}/${m.required})`).join(", ")}`,
+        data: { incomplete: missingPhotos.map((m) => `${m.label} photos (${m.uploaded}/${m.required})`), missingPhotos },
+      });
+    }
     const finalRating = b.finalRating ? Math.max(1, Math.min(5, Number(b.finalRating))) : null;
     const finalNotes = String(b.finalNotes || "").trim() || null;
     const now = new Date();
