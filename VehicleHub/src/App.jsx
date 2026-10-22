@@ -70,6 +70,7 @@ import { AdminDashboardLayout } from './components/admin/AdminDashboardLayout.js
 import { AdminDashboardPage } from './pages/dashboard/AdminDashboardPage.jsx';
 import { VehicleApprovalsPage } from './components/admin/VehicleApprovalsPage.jsx';
 import { AdminPaymentsPage } from './components/admin/AdminPaymentsPage.jsx';
+import { PlanPaymentsPage } from './components/admin/PlanPaymentsPage.jsx';
 // import { AdminMessagesPage } from './components/admin/AdminMessagesPage.jsx';
 import { AdminSettingsPage } from './components/admin/AdminSettingsPage.jsx';
 
@@ -195,6 +196,7 @@ const AdminDashboardShell = () => (
       <Route path="dashboard/carts" element={<CartsPage />} />
       <Route path="dashboard/revenue" element={<RevenuePage />} />
       <Route path="dashboard/orders" element={<AdminPaymentsPage />} />
+      <Route path="dashboard/plan-payments" element={<PlanPaymentsPage />} />
       <Route path="dashboard/inspections" element={<InspectionsPage />} />
       <Route path="dashboard/payments" element={<Navigate to="/admin/dashboard/orders" replace />} />
       {/* <Route path="dashboard/messages" element={<AdminMessagesPage />} /> */}

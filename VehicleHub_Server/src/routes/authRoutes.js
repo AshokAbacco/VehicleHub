@@ -21,8 +21,17 @@ router.post("/login", authLimiter, authController.login);
 
 router.post("/logout", authController.logout);
 router.post("/refresh-token", authController.refreshToken);
-router.post("/forgot-password", authController.forgotPassword);
-router.post("/reset-password", authController.resetPassword);
+// Forgot password: 15 requests per 15 minutes per IP (the code itself also has attempt limits)
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: "Too many attempts. Please wait a few minutes and try again." },
+});
+router.post("/forgot-password", resetLimiter, authController.forgotPassword);
+router.post("/verify-reset-otp", resetLimiter, authController.verifyResetOtp);
+router.post("/reset-password", resetLimiter, authController.resetPassword);
 router.get("/verify-email", authController.verifyEmail);
 router.post(
   "/change-password",

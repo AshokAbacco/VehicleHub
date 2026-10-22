@@ -28,6 +28,15 @@ export const adminApi = apiSlice.injectEndpoints({
       query: (formData) => ({ url: '/vehicles', method: 'POST', body: formData }),
       invalidatesTags: [...ADMIN, 'Vehicle'],
     }),
+    // ---------------- Plan payments (Pricing page subscriptions) ----------------
+    // params: { search, planStatus, paymentStatus, location, duration, from, to, sort, order, page, limit }
+    getPlanPayments: builder.query({
+      query: (params = {}) => ({
+        url: '/admin/plan-payments',
+        params: Object.fromEntries(Object.entries(params).filter(([, v]) => v !== '' && v !== undefined && v !== null)),
+      }),
+      providesTags: [...ADMIN, 'PlanPayments'],
+    }),
     getPendingVehicles: builder.query({
       query: () => '/vehicles/admin/pending',
       providesTags: [...ADMIN, 'Vehicle'],
@@ -176,4 +185,5 @@ export const {
   useGetInspectorsQuery,
   useGetAdminInspectionsQuery,
   useAssignInspectionMutation,
+  useGetPlanPaymentsQuery,
 } = adminApi;

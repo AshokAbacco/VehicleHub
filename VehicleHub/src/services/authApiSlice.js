@@ -30,6 +30,19 @@ export const authApi = apiSlice.injectEndpoints({
         body: payload,
       }),
     }),
+    // ---- Forgot password (code emailed from the MotorDesk Microsoft 365 mailbox) ----
+    // { identifier } -> { data: { sent, sentTo, resendIn, expiresInMinutes } }
+    forgotPassword: builder.mutation({
+      query: (body) => ({ url: "/auth/forgot-password", method: "POST", body }),
+    }),
+    // { identifier, otp } -> { data: { resetToken, expiresInMinutes } }
+    verifyResetOtp: builder.mutation({
+      query: (body) => ({ url: "/auth/verify-reset-otp", method: "POST", body }),
+    }),
+    // { resetToken, password, confirmPassword }
+    resetPassword: builder.mutation({
+      query: (body) => ({ url: "/auth/reset-password", method: "POST", body }),
+    }),
     changePassword: builder.mutation({
       query: (payload) => ({
         url: "/auth/change-password",
@@ -47,4 +60,7 @@ export const {
   useGetCurrentUserQuery,
   useRegisterMutation,
   useChangePasswordMutation,
+  useForgotPasswordMutation,
+  useVerifyResetOtpMutation,
+  useResetPasswordMutation,
 } = authApi;

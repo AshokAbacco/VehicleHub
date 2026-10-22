@@ -4,6 +4,7 @@ import { Router } from "express";
 import { authenticateUser, requireAuth, authorizeRoles } from "../middleware/authMiddleware.js";
 import { getAdminBuyers, deleteAdminBuyer } from "../controllers/adminBuyerController.js";
 import * as admin from "../controllers/adminController.js";
+import { getPlanPayments } from "../controllers/planPaymentsController.js";
 
 const router = Router();
 
@@ -32,6 +33,7 @@ router.delete("/buyers/:id", deleteAdminBuyer);
 router.get("/carts", admin.getCarts);
 router.get("/revenue", admin.getRevenue);
 router.get("/orders", admin.getOrders);
+router.get("/plan-payments", getPlanPayments); // Pricing-page plan payments + plan periods
 
 // Notifications + messages
 router.get("/notifications", admin.getNotifications);

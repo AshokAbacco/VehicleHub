@@ -13,6 +13,7 @@
 import { prisma } from "../config/db.js";
 import { sendMail } from "./msMailer.js";
 import { buildInvoicePdf, COMPANY, money, durationText, locationText, planText } from "./invoicePdf.js";
+import { emailLayout } from "./emailLayout.js";
 
 const MAX_ATTEMPTS = 5;
 const RETRY_AFTER_MS = 10 * 60 * 1000; // wait 10 min between tries
@@ -32,14 +33,9 @@ const invoiceEmailHtml = (p) => {
         <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:13px;width:44%">${label}</td>
         <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:13px;font-weight:bold">${value}</td>
       </tr>`;
-  return `
-<div style="font-family:Arial,Helvetica,sans-serif;background:#f1f5f9;padding:32px 12px">
-  <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0">
-    <div style="background:#001f3f;padding:22px 28px">
-      <div style="color:#ffffff;font-size:22px;font-weight:bold">${COMPANY.name}</div>
-      <div style="color:#bfdbfe;font-size:12px;margin-top:4px">Payment receipt &amp; invoice</div>
-    </div>
-    <div style="padding:28px">
+  return emailLayout({
+    subtitle: "Payment receipt & invoice",
+    body: `
       <p style="margin:0 0 14px;color:#0f172a;font-size:15px">Hello ${escapeHtml(p.fullName)},</p>
       <div style="margin:0 0 18px;padding:12px 14px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;color:#065f46;font-size:14px">
         <strong>Payment successful.</strong> We have received your payment of <strong>${rupees(p.amount)}</strong> for the
@@ -62,13 +58,8 @@ const invoiceEmailHtml = (p) => {
         Thank you for choosing ${COMPANY.name}. If you haven't finished your seller registration yet, you can complete it on our website.
       </p>
       <p style="margin:18px 0 0;color:#334155;font-size:14px">Best regards,<br><strong>${COMPANY.name} Team</strong></p>
-    </div>
-    <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;line-height:1.6">
-      ${COMPANY.name} · ${escapeHtml(COMPANY.address.join(" "))}<br>
-      ${escapeHtml(COMPANY.phone)} · <a href="mailto:${COMPANY.email}" style="color:#64748b">${COMPANY.email}</a>
-    </div>
-  </div>
-</div>`;
+      <p style="margin:18px 0 0;color:#64748b;font-size:12px">Questions about this invoice? Just reply to this email.</p>`,
+  });
 };
 
 /**

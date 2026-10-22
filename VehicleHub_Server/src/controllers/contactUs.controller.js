@@ -19,11 +19,13 @@
 // Optional: CONTACT_TO_EMAIL, TICKET_TO_EMAIL to change the recipients below.
 // ============================================================
 
+import { emailLayout } from "../services/emailLayout.js";
+
 const env = (...names) => names.map((n) => process.env[n]).find((v) => v !== undefined && String(v).trim() !== "")?.trim();
 
 const CONTACT_TO = env("CONTACT_TO_EMAIL") || "support@themotordesk.com";
 const TICKET_TO = env("TICKET_TO_EMAIL") || "info@abaccotech.com";
-const BRAND = "MotorDesk VehicleHub"; // used in the acknowledgement email to the customer
+const BRAND = "MotorDesk";
 
 // ---------- Microsoft 365 (Graph) mail ----------
 const ms = () => ({
@@ -130,22 +132,17 @@ const nl2br = (s) => escapeHtml(s).replace(/\r?\n/g, "<br>");
 const submittedAt = () =>
   new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "long", timeStyle: "short" }).format(new Date()) + " IST";
 
-const layout = (title, inner) => `
-<div style="font-family:Arial,Helvetica,sans-serif;background:#f5f7fb;padding:32px 16px">
-  <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0">
-    <div style="background:#001f3f;color:#ffffff;padding:18px 24px;font-size:18px;font-weight:bold">${escapeHtml(title)}</div>
-    <div style="padding:24px;color:#1e293b;font-size:14px;line-height:1.6">${inner}</div>
-  </div>
-</div>`;
+// Same MotorDesk look as every other email (services/emailLayout.js). internal = to our own team.
+const layout = (subtitle, inner, internal = false) => emailLayout({ subtitle, body: inner, internal });
 
 const detailsTable = (rows) => `
-<table style="width:100%;border-collapse:collapse">
+<table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0">
   ${rows
     .map(
       ([label, value]) => `
   <tr>
-    <td style="padding:8px 10px;border:1px solid #e2e8f0;background:#f8fafc;font-weight:bold;width:140px;vertical-align:top">${escapeHtml(label)}</td>
-    <td style="padding:8px 10px;border:1px solid #e2e8f0">${value}</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:13px;width:130px;vertical-align:top">${escapeHtml(label)}</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:13px">${value}</td>
   </tr>`,
     )
     .join("")}
@@ -157,11 +154,12 @@ const submissionEmail = ({ heading, intro, name, email, message, when }) => ({
     `<p style="margin:0 0 16px">${escapeHtml(intro)}</p>
      ${detailsTable([
        ["Name", escapeHtml(name)],
-       ["Email", `<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>`],
+       ["Email", `<a href="mailto:${escapeHtml(email)}" style="color:#1d4ed8">${escapeHtml(email)}</a>`],
        ["Submitted on", escapeHtml(when)],
        ["Message", nl2br(message)],
      ])}
      <p style="margin:16px 0 0;color:#64748b;font-size:12px">Reply to this email to respond to the customer directly.</p>`,
+    true,
   ),
   text: `${heading}\n\n${intro}\n\nName: ${name}\nEmail: ${email}\nSubmitted on: ${when}\n\nMessage:\n${message}\n`,
 });
@@ -182,7 +180,7 @@ const acknowledgementEmail = (name) => {
     subject: `We Have Received Your Enquiry – ${BRAND}`,
     text,
     html: layout(
-      `${BRAND} Support`,
+      "We have received your enquiry",
       `<p style="margin:0 0 12px">Hello ${escapeHtml(name)},</p>
        <p style="margin:0 0 12px">Thank you for contacting ${BRAND}. We have received your enquiry and will review your message.</p>
        <p style="margin:0 0 12px">Our team will get back to you within <strong>24 hours</strong>.</p>

@@ -344,6 +344,7 @@ model Category {
   vehicles    Vehicle[]
 }
 
+// Password-reset codes (services/passwordReset.js). otp = bcrypt hash, never the plain code.
 model OTP {
   id        String   @id @default(cuid())
   mobile    String
@@ -351,9 +352,11 @@ model OTP {
   otp       String
   expiresAt DateTime
   verified  Boolean  @default(false)
+  attempts  Int      @default(0) // wrong codes entered; 5 cancels the code
   createdAt DateTime @default(now())
 
   @@index([mobile])
+  @@index([email])
 }
 
 // ============================================================
@@ -444,17 +447,17 @@ model Vehicle {
   keylessEntry   Boolean  @default(false)
 
   // STATUS / APPROVAL WORKFLOW
-  status       VehicleStatus @default(PENDING)
-  isFeatured   Boolean       @default(false)
-  isApproved   Boolean       @default(false)
-  isVerified   Boolean       @default(false)
+  status             VehicleStatus             @default(PENDING)
+  isFeatured         Boolean                   @default(false)
+  isApproved         Boolean                   @default(false)
+  isVerified         Boolean                   @default(false)
   verificationOption VehicleVerificationOption @default(VERIFY)
-  views        Int           @default(0)
-  favorites    Int           @default(0)
-  rejectReason String?
-  publishedAt  DateTime?
-  soldAt       DateTime?
-  soldPrice    Float?
+  views              Int                       @default(0)
+  favorites          Int                       @default(0)
+  rejectReason       String?
+  publishedAt        DateTime?
+  soldAt             DateTime?
+  soldPrice          Float?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -781,8 +784,8 @@ model SubscriptionPayment {
   invoiceEmailLastTriedAt DateTime?
   invoiceSentAt           DateTime?
 
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([email])
   @@index([phone])

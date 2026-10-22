@@ -108,7 +108,7 @@ export const LoginPage = () => {
                     <p>
                         <ShoppingBag size={14} className="mr-1.5 inline text-slate-400" />
                         New to VehicleHub?{' '}
-                        <Link to="/register" state={location.state} className="font-semibold text-[#001f3f] hover:underline">Create a Buyer account</Link>
+                        <Link to="/register" state={location.state} className="font-semibold text-[#001f3f] hover:underline">Create a buyer account</Link>
                     </p>
                     <p>
                         <Store size={14} className="mr-1.5 inline text-slate-400" />
@@ -141,7 +141,9 @@ export const LoginPage = () => {
                 <div>
                     <label htmlFor="password" className="mb-1.5 block text-sm font-semibold text-slate-700">Password</label>
                     <PasswordInput value={form.password} onChange={onChange} />
-                    <p className="mt-1.5 text-right text-xs text-slate-400">Forgot your password? Contact the VehicleHub admin.</p>
+                    <p className="mt-1.5 text-right text-xs">
+                        <Link to="/forgot-password" state={{ identifier: form.identifier.trim() }} className="font-semibold text-[#001f3f] hover:underline">Forgot password?</Link>
+                    </p>
                 </div>
                 <button
                     type="submit"

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, CheckSquare, Car, Users, UserCircle2, IndianRupee,
-    ShoppingCart, Bell, Settings, ShieldCheck, LogOut, X, PlusCircle, Receipt, ClipboardCheck
+    ShoppingCart, Bell, Settings, ShieldCheck, LogOut, X, PlusCircle, Receipt, ClipboardCheck, BadgeIndianRupee
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 
@@ -25,6 +25,7 @@ const sections = [
         title: 'Finance',
         items: [
             { to: '/admin/dashboard/orders', label: 'Orders & Sales', icon: Receipt },
+            { to: '/admin/dashboard/plan-payments', label: 'Plan Payments', icon: BadgeIndianRupee },
             { to: '/admin/dashboard/revenue', label: 'Revenue', icon: IndianRupee },
         ],
     },

@@ -11,9 +11,8 @@
 import { prisma } from "../config/db.js";
 import { sendMail, senderAddress } from "./msMailer.js";
 import { COMPANY } from "./invoicePdf.js";
+import { emailLayout, escapeHtml, supportContacts } from "./emailLayout.js";
 
-const escapeHtml = (s) =>
-  String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 /** Frontend login page from CORS_ORIGIN (first entry if several; ignored if it's "*" or empty). */
 export const loginUrl = () => {
@@ -46,20 +45,7 @@ const table = (rows) => `
 
 const heading = (text) => `<h3 style="margin:22px 0 6px;color:#001f3f;font-size:15px">${text}</h3>`;
 
-const layout = (subtitle, inner) => `
-<div style="font-family:Arial,Helvetica,sans-serif;background:#f1f5f9;padding:32px 12px">
-  <div style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0">
-    <div style="background:#001f3f;padding:22px 28px">
-      <div style="color:#ffffff;font-size:22px;font-weight:bold">${COMPANY.name}</div>
-      <div style="color:#bfdbfe;font-size:12px;margin-top:4px">${subtitle}</div>
-    </div>
-    <div style="padding:26px 28px;color:#334155;font-size:14px;line-height:1.6">${inner}</div>
-    <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;color:#94a3b8;font-size:12px;line-height:1.6">
-      ${COMPANY.name} · ${escapeHtml(COMPANY.address.join(" "))}<br>
-      ${escapeHtml(COMPANY.phone)} · <a href="mailto:${COMPANY.email}" style="color:#64748b">${COMPANY.email}</a>
-    </div>
-  </div>
-</div>`;
+const layout = (subtitle, inner, internal = false) => emailLayout({ subtitle, body: inner, internal, width: 620 });
 
 const loginLink = (url) =>
   url ? `<a href="${escapeHtml(url)}" style="color:#1d4ed8">${escapeHtml(url)}</a>` : "the Login page on the MotorDesk website";
@@ -103,10 +89,7 @@ const welcomeHtml = (r) =>
     </div>
 
     <p style="margin:0 0 6px">If you have not received approval within 24 hours, please contact our support team:</p>
-    <p style="margin:0 0 16px">
-      Email: <a href="mailto:${COMPANY.email}" style="color:#1d4ed8">${COMPANY.email}</a><br>
-      Phone: ${escapeHtml(COMPANY.phone)}
-    </p>
+    <p style="margin:0 0 16px">${supportContacts()}</p>
 
     <p style="margin:0 0 16px">Thank you for choosing ${COMPANY.name}. We look forward to helping you grow your business!</p>
     <p style="margin:0">Best regards,<br><strong>${COMPANY.name} Support Team</strong></p>`,
@@ -161,6 +144,7 @@ const adminHtml = (r) => {
     </div>
 
     <p style="margin:0">Best regards,<br><strong>${COMPANY.name} System</strong></p>`,
+    true, // to our own team — no MotorDesk contact details in the footer
   );
 };
 
