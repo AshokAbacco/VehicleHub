@@ -43,6 +43,16 @@ export const authApi = apiSlice.injectEndpoints({
     resetPassword: builder.mutation({
       query: (body) => ({ url: "/auth/reset-password", method: "POST", body }),
     }),
+    // ---- Settings page: own profile + address (every role) ----
+    getAccount: builder.query({
+      query: () => "/auth/account",
+      providesTags: ["Account"],
+    }),
+    // { fullName, email, phone, address, city, state, pincode }
+    updateAccount: builder.mutation({
+      query: (body) => ({ url: "/auth/account", method: "PATCH", body }),
+      invalidatesTags: ["Account", "User"],
+    }),
     changePassword: builder.mutation({
       query: (payload) => ({
         url: "/auth/change-password",
@@ -63,4 +73,6 @@ export const {
   useForgotPasswordMutation,
   useVerifyResetOtpMutation,
   useResetPasswordMutation,
+  useGetAccountQuery,
+  useUpdateAccountMutation,
 } = authApi;

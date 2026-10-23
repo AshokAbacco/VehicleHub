@@ -3,9 +3,10 @@
 // Assigned jobs show up on that inspector's dashboard (and the seller is notified).
 import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { toast } from 'react-hot-toast';
-import { ClipboardCheck, Plus, Search, X, Loader2, CalendarClock, UserCheck, ChevronDown } from 'lucide-react';
+import { ClipboardCheck, Plus, Search, X, Loader2, CalendarClock, UserCheck, ChevronDown, UserCog } from 'lucide-react';
 import {
     useGetAdminInspectionsQuery,
     useGetInspectorsQuery,
@@ -106,7 +107,10 @@ const AssignModal = ({ preset, onClose }) => {
                     <label className="block">
                         <span className="mb-1.5 block text-xs font-semibold text-slate-600">Field inspector</span>
                         {loadingInspectors ? <div className="flex h-11 items-center"><Loader2 size={16} className="animate-spin text-[#001f3f]" /></div> : inspectors.length === 0 ? (
-                            <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-700">No field inspector accounts yet.</p>
+                            <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-700">
+                                No active field inspectors yet.{' '}
+                                <Link to="/admin/dashboard/field-inspectors" onClick={onClose} className="font-bold underline">Add an inspector</Link>
+                            </p>
                         ) : (
                             <div className="relative">
                                 <select value={form.inspectorId} onChange={(e) => set('inspectorId', e.target.value)} className={`${inputCls} appearance-none pr-9`}>
@@ -173,9 +177,14 @@ export const InspectionsPage = () => {
                     <h1 className="flex items-center gap-2 text-2xl font-extrabold text-slate-900"><ClipboardCheck size={22} className="text-[#001f3f]" /> Field Inspections</h1>
                     <p className="text-sm text-slate-500">Assign field inspectors to vehicles and track their verification reports.</p>
                 </div>
-                <button onClick={() => setAssigning('new')} className="flex w-fit items-center gap-1.5 rounded-xl bg-[#001f3f] px-4 py-2.5 text-sm font-bold text-white shadow-md hover:bg-[#002a55]">
-                    <Plus size={15} /> Assign inspector
-                </button>
+                <div className="flex flex-wrap gap-2">
+                    <Link to="/admin/dashboard/field-inspectors" className="flex w-fit items-center gap-1.5 rounded-xl border-2 border-[#001f3f] bg-white px-4 py-2 text-sm font-bold text-[#001f3f] hover:bg-[#e6f2ff]">
+                        <UserCog size={15} /> Manage inspectors
+                    </Link>
+                    <button onClick={() => setAssigning('new')} className="flex w-fit items-center gap-1.5 rounded-xl bg-[#001f3f] px-4 py-2.5 text-sm font-bold text-white shadow-md hover:bg-[#002a55]">
+                        <Plus size={15} /> Assign inspector
+                    </button>
+                </div>
             </div>
 
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm">

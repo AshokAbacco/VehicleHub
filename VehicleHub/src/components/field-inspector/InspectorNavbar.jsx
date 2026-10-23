@@ -5,7 +5,7 @@
 // header must not add its own left padding (it used to, pushing everything ~260px right).
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell, ChevronDown, UserCircle, LogOut, ClipboardList, X } from 'lucide-react';
+import { Menu, Search, Bell, ChevronDown, UserCircle, LogOut, ClipboardList, X, Settings } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useGetNotificationsQuery } from '../../services/fieldInspectorApiSlice.js';
 
@@ -123,6 +123,9 @@ export const InspectorNavbar = ({ onOpenSidebar }) => {
                                 </div>
                                 <button onClick={() => { setDropdownOpen(false); navigate('/field-inspector/profile'); }} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50">
                                     <UserCircle size={15} className="text-slate-400" /> My profile
+                                </button>
+                                <button onClick={() => { setDropdownOpen(false); navigate('/field-inspector/settings'); }} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50">
+                                    <Settings size={15} className="text-slate-400" /> Settings
                                 </button>
                                 <button onClick={() => { setDropdownOpen(false); navigate('/field-inspector/inspections'); }} className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50">
                                     <ClipboardList size={15} className="text-slate-400" /> My inspections

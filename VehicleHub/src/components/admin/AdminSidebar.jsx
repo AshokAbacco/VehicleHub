@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, CheckSquare, Car, Users, UserCircle2, IndianRupee,
-    ShoppingCart, Bell, Settings, ShieldCheck, LogOut, X, PlusCircle, Receipt, ClipboardCheck, BadgeIndianRupee
+    ShoppingCart, Bell, Settings, ShieldCheck, LogOut, X, PlusCircle, Receipt, ClipboardCheck, BadgeIndianRupee, UserCog, Search
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 
@@ -19,6 +19,7 @@ const sections = [
             { to: '/admin/dashboard/buyers', label: 'Buyers', icon: Users },
             { to: '/admin/dashboard/carts', label: 'Carts & Wishlist', icon: ShoppingCart },
             { to: '/admin/dashboard/inspections', label: 'Field Inspections', icon: ClipboardCheck },
+            { to: '/admin/dashboard/field-inspectors', label: 'Field Inspectors', icon: UserCog },
         ],
     },
     {
@@ -29,6 +30,7 @@ const sections = [
             { to: '/admin/dashboard/revenue', label: 'Revenue', icon: IndianRupee },
         ],
     },
+    { title: 'Discover', items: [{ to: '/search', label: 'Browse Vehicles', icon: Search }] },
     {
         title: 'Engagement',
         items: [

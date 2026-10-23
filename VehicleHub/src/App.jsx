@@ -33,7 +33,6 @@ import { BuyerLayout } from './components/buyer/BuyerLayout.jsx';
 import { BuyerWishlistPage } from './components/buyer/BuyerWishlistPage.jsx';
 import { BuyerInquiriesPage } from './components/buyer/BuyerInquiriesPage.jsx';
 import { BuyerOrdersPage } from './components/buyer/BuyerOrdersPage.jsx';
-import { BuyerSettingsPage } from './components/buyer/BuyerSettingsPage.jsx';
 import { BuyerNotification } from './components/buyer/BuyerNotification.jsx';
 import { BuyerProfile } from './components/buyer/BuyerProfile.jsx';
 
@@ -71,8 +70,9 @@ import { AdminDashboardPage } from './pages/dashboard/AdminDashboardPage.jsx';
 import { VehicleApprovalsPage } from './components/admin/VehicleApprovalsPage.jsx';
 import { AdminPaymentsPage } from './components/admin/AdminPaymentsPage.jsx';
 import { PlanPaymentsPage } from './components/admin/PlanPaymentsPage.jsx';
+import { FieldInspectorsPage } from './components/admin/FieldInspectorsPage.jsx';
+import { AccountSettingsPage } from './components/account/AccountSettingsPage.jsx';
 // import { AdminMessagesPage } from './components/admin/AdminMessagesPage.jsx';
-import { AdminSettingsPage } from './components/admin/AdminSettingsPage.jsx';
 
 // import { DocumentsPage } from './components/seller/DocumentsPage.jsx';
 // import { TeamMembersPage } from './components/seller/sellerPagesMock.js';
@@ -178,6 +178,7 @@ const SellerDashboardShell = ({ base = '/seller' }) => (
       <Route path="/profile" element={<Profile />} />
       <Route path="dashboard/notifications" element={<SellerNotificationsPage />} />
       <Route path="dashboard/purchase-requests" element={<SellerPurchaseRequestsPage />} />
+      <Route path="dashboard/settings" element={<AccountSettingsPage businessProfilePath={`${base}/dashboard/business-profile`} />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   </SellerDashboardLayout>
@@ -198,11 +199,12 @@ const AdminDashboardShell = () => (
       <Route path="dashboard/orders" element={<AdminPaymentsPage />} />
       <Route path="dashboard/plan-payments" element={<PlanPaymentsPage />} />
       <Route path="dashboard/inspections" element={<InspectionsPage />} />
+      <Route path="dashboard/field-inspectors" element={<FieldInspectorsPage />} />
       <Route path="dashboard/payments" element={<Navigate to="/admin/dashboard/orders" replace />} />
       {/* <Route path="dashboard/messages" element={<AdminMessagesPage />} /> */}
       <Route path="dashboard/messages" element={<MessagesPage />} />
       <Route path="dashboard/notifications" element={<NotificationsPage />} />
-      <Route path="dashboard/settings" element={<AdminSettingsPage />} />
+      <Route path="dashboard/settings" element={<AccountSettingsPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   </AdminDashboardLayout>
@@ -233,7 +235,7 @@ function App() {
                     <Route path="dashboard/orders" element={<BuyerOrdersPage />} />
                     <Route path="dashboard/notifications" element={<BuyerNotification />} />
                     <Route path="dashboard/profile" element={<BuyerProfile />} />
-                    <Route path="dashboard/settings" element={<BuyerSettingsPage />} />
+                    <Route path="dashboard/settings" element={<AccountSettingsPage />} />
                     <Route path="*" element={<NotFoundPage />} />
                   </Route>
                   <Route path="/seller/*" element={<ProtectedRoute allowedRoles={['seller']}><SellerDashboardShell base="/seller" /></ProtectedRoute>} />
@@ -264,6 +266,7 @@ function App() {
                     <Route path="inspections/:id" element={<InspectionDetailByID />} />
                     <Route path="inspections/:id/verify" element={<InspectionVerify />} />
                     <Route path="profile" element={<FieldInspectorProfile />} />
+                    <Route path="settings" element={<AccountSettingsPage />} />
                     <Route path="calendar" element={<InspectionCalendar />} />
                     {/* inspection detail, calendar, reports, messages, profile, settings — next round */}
                     <Route path="*" element={<NotFoundPage />} />

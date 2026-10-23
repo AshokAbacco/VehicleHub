@@ -5,6 +5,7 @@ import { authenticateUser, requireAuth, authorizeRoles } from "../middleware/aut
 import { getAdminBuyers, deleteAdminBuyer } from "../controllers/adminBuyerController.js";
 import * as admin from "../controllers/adminController.js";
 import { getPlanPayments } from "../controllers/planPaymentsController.js";
+import * as fieldInspectors from "../controllers/fieldInspectorAdminController.js";
 
 const router = Router();
 
@@ -45,6 +46,12 @@ router.patch("/conversations/:id/read", admin.markConversationRead);
 
 // Field inspections
 router.get("/inspectors", admin.getInspectors);
+
+// Field Inspector accounts (add / edit / deactivate / resend sign-in email)
+router.get("/field-inspectors", fieldInspectors.listFieldInspectors);
+router.post("/field-inspectors", fieldInspectors.createFieldInspector);
+router.patch("/field-inspectors/:id", fieldInspectors.updateFieldInspector);
+router.post("/field-inspectors/:id/send-invite", fieldInspectors.sendInspectorInvite);
 router.get("/inspections", admin.getInspections);
 router.post("/inspections", admin.assignInspection);
 

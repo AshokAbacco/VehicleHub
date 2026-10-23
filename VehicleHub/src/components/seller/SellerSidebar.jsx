@@ -158,7 +158,7 @@
 //     );
 // };
 import { useState } from 'react';
-import { Home, ShoppingBag, Archive, Sparkles, X, Bell, LogOut, Car, ShoppingCart } from 'lucide-react';
+import { Home, ShoppingBag, Archive, Sparkles, X, Bell, LogOut, Car, ShoppingCart, Store, Settings, Search } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useSellerArea } from '../../hooks/useSellerArea.js';
@@ -183,6 +183,17 @@ const buildSections = (to, isDealer) => [
             { to: to('sold-vehicles'), label: 'Sold Vehicles', icon: Archive },
             { to: to('inspection-requests'), label: 'Inspection Requests', icon: Car },
             { to: to('notifications'), label: 'Notifications', icon: Bell },
+        ],
+    },
+    {
+        title: 'Discover', accent: 'text-violet-600',
+        items: [{ to: '/search', label: 'Browse Vehicles', icon: Search }],
+    },
+    {
+        title: 'Account', accent: 'text-slate-500',
+        items: [
+            { to: to('business-profile'), label: 'Business Profile', icon: Store },
+            { to: to('settings'), label: 'Settings', icon: Settings },
         ],
     },
 ];

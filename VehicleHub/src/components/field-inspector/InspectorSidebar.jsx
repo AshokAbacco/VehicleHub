@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
     LayoutDashboard, ClipboardList, Clock, CalendarCheck, Hourglass, CheckCircle2,
-    Calendar, FileBarChart, Bell, UserCircle, LogOut, X,
+    Calendar, FileBarChart, Bell, UserCircle, LogOut, X, Settings, Search,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 
@@ -24,8 +24,15 @@ const groups = [
         ],
     },
     { label: 'Reports', accent: 'text-violet-600', items: [{ label: 'Verification Reports', to: '/field-inspector/reports', icon: FileBarChart }] },
+    { label: 'Discover', accent: 'text-sky-600', items: [{ label: 'Browse Vehicles', to: '/search', icon: Search }] },
     { label: 'Communication', accent: 'text-amber-600', items: [{ label: 'Notifications', to: '/field-inspector/notifications', icon: Bell }] },
-    { label: 'Account', accent: 'text-slate-500', items: [{ label: 'Profile', to: '/field-inspector/profile', icon: UserCircle }] },
+    {
+        label: 'Account', accent: 'text-slate-500',
+        items: [
+            { label: 'Profile', to: '/field-inspector/profile', icon: UserCircle },
+            { label: 'Settings', to: '/field-inspector/settings', icon: Settings },
+        ],
+    },
 ];
 
 const SidebarBody = ({ expanded, isMobile, onNavigate, onClose }) => {

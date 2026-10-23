@@ -139,6 +139,12 @@ export const SellerNavbar = ({ onOpenSidebar }) => {
                                     >
                                         My profile
                                     </button>
+                                    <button
+                                        onClick={() => { setDropdownOpen(false); goTo(area.to('settings')); }}
+                                        className="w-full px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                    >
+                                        Settings
+                                    </button>
                                 </div>
                             )}
                         </div>

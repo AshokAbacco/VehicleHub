@@ -133,6 +133,24 @@ export const adminApi = apiSlice.injectEndpoints({
     }),
 
     // ---------------- Field inspections ----------------
+    // ---------------- Field Inspector accounts ----------------
+    getFieldInspectors: builder.query({
+      query: () => '/admin/field-inspectors',
+      providesTags: [...ADMIN, 'FieldInspectors'],
+    }),
+    // { fullName, email, phone, password?, sendEmail? }
+    createFieldInspector: builder.mutation({
+      query: (body) => ({ url: '/admin/field-inspectors', method: 'POST', body }),
+      invalidatesTags: [...ADMIN, 'FieldInspectors'],
+    }),
+    // { id, fullName?, email?, phone?, isActive?, password? }
+    updateFieldInspector: builder.mutation({
+      query: ({ id, ...body }) => ({ url: `/admin/field-inspectors/${id}`, method: 'PATCH', body }),
+      invalidatesTags: [...ADMIN, 'FieldInspectors'],
+    }),
+    sendInspectorInvite: builder.mutation({
+      query: (id) => ({ url: `/admin/field-inspectors/${id}/send-invite`, method: 'POST' }),
+    }),
     getInspectors: builder.query({
       query: () => '/admin/inspectors',
       providesTags: ADMIN,
@@ -186,4 +204,8 @@ export const {
   useGetAdminInspectionsQuery,
   useAssignInspectionMutation,
   useGetPlanPaymentsQuery,
+  useGetFieldInspectorsQuery,
+  useCreateFieldInspectorMutation,
+  useUpdateFieldInspectorMutation,
+  useSendInspectorInviteMutation,
 } = adminApi;

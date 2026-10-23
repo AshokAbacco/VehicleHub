@@ -1,15 +1,15 @@
 // VehicleHub/VehicleHub/src/components/field-inspector/FieldInspectorProfile.jsx
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { toast } from 'react-hot-toast';
 import {
     User, Mail, Phone, Shield, Calendar, Pencil, X, Save, Loader2,
-    KeyRound, ClipboardList, CheckCircle2, ShieldCheck, Eye, EyeOff,
+    KeyRound, ClipboardList, CheckCircle2, ShieldCheck,
 } from 'lucide-react';
 import {
     useGetProfileQuery,
     useUpdateInspectorProfileMutation,
-    useChangeInspectorPasswordMutation,
 } from '../../services/fieldInspectorApiSlice.js';
 import { AvatarImage } from '../ui/AvatarImage.jsx';
 
@@ -35,16 +35,13 @@ const TextInput = (props) => (
 export const FieldInspectorProfile = () => {
     const { data, isLoading, isError } = useGetProfileQuery();
     const [updateProfile, { isLoading: saving }] = useUpdateInspectorProfileMutation();
-    const [changePassword, { isLoading: changingPassword }] = useChangeInspectorPasswordMutation();
+    const navigate = useNavigate();
 
     const profile = data?.data;
 
     const [editing, setEditing] = useState(false);
     const [form, setForm] = useState({ fullName: '', phone: '' });
 
-    const [pwOpen, setPwOpen] = useState(false);
-    const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
 
     useEffect(() => {
         if (profile) setForm({ fullName: profile.fullName || '', phone: profile.phone || '' });
@@ -61,23 +58,6 @@ export const FieldInspectorProfile = () => {
         }
     };
 
-    const handleChangePassword = async (e) => {
-        e.preventDefault();
-        if (pwForm.newPassword !== pwForm.confirmPassword) {
-            return toast.error('New passwords do not match');
-        }
-        if (pwForm.newPassword.length < 8) {
-            return toast.error('New password must be at least 8 characters');
-        }
-        try {
-            await changePassword({ currentPassword: pwForm.currentPassword, newPassword: pwForm.newPassword }).unwrap();
-            toast.success('Password changed successfully');
-            setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-            setPwOpen(false);
-        } catch (err) {
-            toast.error(err?.data?.message || 'Failed to change password');
-        }
-    };
 
     if (isLoading) {
         return <div className="flex h-64 items-center justify-center"><Loader2 className="h-7 w-7 animate-spin text-[#001f3f]" /></div>;
@@ -193,68 +173,20 @@ export const FieldInspectorProfile = () => {
                         )}
                     </div>
 
-                    {/* Change password */}
+                    {/* Change password — done on the Forgot Password page (code sent to email) */}
                     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-                        <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
-                            <div className="flex items-center gap-2">
-                                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#e6f2ff] text-[#001f3f]"><KeyRound size={15} /></span>
-                                <h2 className="text-base font-bold text-slate-900">Change Password</h2>
-                            </div>
-                            {!pwOpen && (
-                                <button onClick={() => setPwOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50">
-                                    <Pencil size={12} /> Change
-                                </button>
-                            )}
+                        <div className="mb-3 flex items-center gap-2 border-b border-slate-100 pb-3">
+                            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#e6f2ff] text-[#001f3f]"><KeyRound size={15} /></span>
+                            <h2 className="text-base font-bold text-slate-900">Change Password</h2>
                         </div>
-
-                        {pwOpen ? (
-                            <form onSubmit={handleChangePassword} className="space-y-3">
-                                {[
-                                    { key: 'currentPassword', label: 'Current Password', show: 'current' },
-                                    { key: 'newPassword', label: 'New Password', show: 'next' },
-                                    { key: 'confirmPassword', label: 'Confirm New Password', show: 'confirm' },
-                                ].map((f) => (
-                                    <div key={f.key}>
-                                        <label className="mb-1.5 block text-xs font-semibold text-slate-600">{f.label}</label>
-                                        <div className="relative">
-                                            <input
-                                                type={showPw[f.show] ? 'text' : 'password'}
-                                                value={pwForm[f.key]}
-                                                onChange={(e) => setPwForm({ ...pwForm, [f.key]: e.target.value })}
-                                                required
-                                                className="w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-4 py-2.5 pr-11 text-sm text-slate-900 transition focus:border-[#001f3f] focus:bg-white focus:outline-none"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowPw({ ...showPw, [f.show]: !showPw[f.show] })}
-                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                                            >
-                                                {showPw[f.show] ? <EyeOff size={15} /> : <Eye size={15} />}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                                <div className="flex gap-2 pt-1">
-                                    <button
-                                        type="button"
-                                        onClick={() => { setPwOpen(false); setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' }); }}
-                                        className="flex-1 rounded-xl border-2 border-slate-200 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={changingPassword}
-                                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#001f3f] py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#002a55] disabled:opacity-60"
-                                    >
-                                        {changingPassword ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />}
-                                        Update Password
-                                    </button>
-                                </div>
-                            </form>
-                        ) : (
-                            <p className="text-sm text-slate-400">••••••••••••</p>
-                        )}
+                        <p className="text-sm text-slate-500">We'll email you a 6-digit code, then you choose a new password.</p>
+                        <button
+                            type="button"
+                            onClick={() => navigate('/forgot-password', { state: { identifier: profile?.email || '' } })}
+                            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#001f3f] py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#002a55]"
+                        >
+                            <KeyRound size={15} /> Change password
+                        </button>
                     </div>
                 </div>
             </div>

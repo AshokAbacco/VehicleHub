@@ -3,7 +3,8 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
 import * as authController from "../controllers/authController.js";
-import { authenticateUser } from "../middleware/authMiddleware.js";
+import { authenticateUser, requireAuth } from "../middleware/authMiddleware.js";
+import { getAccount, updateAccount } from "../controllers/accountController.js";
 
 const router = express.Router();
 
@@ -39,5 +40,9 @@ router.post(
   authController.changePassword,
 );
 router.get("/me", authenticateUser, authController.getCurrentUser);
+
+// Settings page — own profile + address (every role). Passwords: Forgot Password only.
+router.get("/account", authenticateUser, requireAuth, getAccount);
+router.patch("/account", authenticateUser, requireAuth, updateAccount);
 
 export default router;

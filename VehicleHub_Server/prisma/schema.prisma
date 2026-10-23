@@ -173,6 +173,11 @@ model User {
   isVerified Boolean  @default(false)
   isActive   Boolean  @default(true)
   isBlocked  Boolean  @default(false)
+  // Address (Settings page). Sellers/Dealers keep theirs on SellerProfile instead.
+  address    String?
+  city       String?
+  state      String?
+  pincode    String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

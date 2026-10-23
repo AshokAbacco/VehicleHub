@@ -55,7 +55,7 @@ class AuthService {
     const invalid = () => httpError("Incorrect email / mobile number or password", 401);
     if (!user) throw invalid();
     if (!user.password) {
-      throw httpError("This account doesn't have a password yet. Please ask the VehicleHub admin to set one for you.", 401);
+      throw httpError("This account doesn't have a password yet. Use \"Forgot password?\" to set one with a code sent to your email.", 401);
     }
     if (!(await bcrypt.compare(password, user.password))) throw invalid();
     if (user.isBlocked) throw httpError("Your account has been blocked. Please contact VehicleHub.", 403);
